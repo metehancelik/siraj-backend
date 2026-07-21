@@ -1,0 +1,86 @@
+# Siraj RAG — Coolify / docker compose kurulumu.
+# Coolify'da: yeni kaynak > Docker Compose > bu dosyayı yapıştırın, ortam değişkenlerini girin.
+# Gizli değerler Coolify ortam sekmesinden (veya yanındaki .env'den) gelir:
+#   SIRAJ_IMAGE, POSTGRES_PASSWORD, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, API_TOKEN
+
+services:
+  backend:
+    image: ${SIRAJ_IMAGE:-YOUR_DOCKERHUB_USER/siraj-backend:latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://siraj:${POSTGRES_PASSWORD}@db:5432/siraj
+      # Embedding: varsayılan olarak gömülü TEI'ye doğrudan (kutudan çıktığı gibi çalışır).
+      # LiteLLM üzerinden erişmek isterseniz: EMBEDDING_MODE=openai + EMBEDDING_BASE_URL/API_KEY.
+      EMBEDDING_MODE: ${EMBEDDING_MODE:-tei}
+      EMBEDDING_URL: http://embeddings:80
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:-gemma-4-12b}
+      API_TOKEN: ${API_TOKEN}
+      TOP_K: "3"
+      MAX_CHUNK_CHARS: "550"
+      LLM_MAX_TOKENS: "320"
+    ports:
+      - "8000:8000"   # Coolify'da bunun yerine domain + reverse proxy kullanın
+    depends_on:
+      db:
+        condition: service_healthy
+      embeddings:
+        condition: service_started
+
+  # bge-m3 embedding servisi (CPU imajı). İlk açılışta modeli (~2GB) indirir.
+  embeddings:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    restart: unless-stopped
+    command: --model-id BAAI/bge-m3
+    volumes:
+      - tei-data:/data
+
+  # pgvector'lü Postgres. Kendi Postgres'inizi kullanacaksanız bu servisi silip
+  # backend'in DATABASE_URL'ini kendi sunucunuza yöneltin ve schema.sql'i elle uygulayın.
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: siraj
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: siraj
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U siraj -d siraj"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- İsteğe bağlı: ingest'i tek seferlik iş olarak çalıştırmak için ---
+  # Varsayılan deploy'da başlamaz (profile). Elle tetiklenir:
+  #   docker compose --profile ingest run --rm ingest
+  ingest:
+    image: ${SIRAJ_IMAGE:-YOUR_DOCKERHUB_USER/siraj-backend:latest}
+    profiles: ["ingest"]
+    restart: "no"
+    command: python -m ingest.ingest --data-dir /app/data
+    # Veri imajda gömülü DEĞİL: JSONL'i sunucuya kopyalayıp (scp) DATA_DIR'e koyun,
+    # o dizin ingest'e /app/data olarak bağlanır. Örn: DATA_DIR=/opt/siraj/data
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data:ro
+    environment:
+      DATABASE_URL: postgresql://siraj:${POSTGRES_PASSWORD}@db:5432/siraj
+      EMBEDDING_MODE: ${EMBEDDING_MODE:-tei}
+      EMBEDDING_URL: http://embeddings:80
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      embeddings:
+        condition: service_started
+
+volumes:
+  tei-data:
+  db-data:
