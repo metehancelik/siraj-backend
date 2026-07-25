@@ -69,11 +69,33 @@ LIMIT $5;
 """
 
 
+_RELEVANCE_SQL = """
+SELECT
+    (SELECT MIN(embedding <=> $1::vector) FROM chunks) AS best_dist,
+    EXISTS (
+        SELECT 1 FROM chunks
+        WHERE tsv @@ websearch_to_tsquery('turkish', f_unaccent($2))
+    ) AS fts_hit;
+"""
+
+
 async def retrieve(question: str) -> list[Passage]:
     import json
 
     qvec = await embed_one(question, kind="query")
     pool = await get_pool()
+
+    async with pool.acquire() as conn:
+        relevance = await conn.fetchrow(_RELEVANCE_SQL, _vector_literal(qvec), question)
+
+    # Vektör araması "en yakın komşu" mantığıyla çalıştığı için külliyatla hiç ilgisi
+    # olmayan bir soruda bile bir şeyler döner. Ne semantik olarak yakın (mesafe eşiğin
+    # altında) ne de tam-metin eşleşmesi varsa, bu soru bu külliyatla alakasızdır ->
+    # boş dön (sahte/alakasız kaynak göstermemek için; bkz. app/prompt.py boş-passages yolu).
+    best_dist = relevance["best_dist"]
+    if (best_dist is None or best_dist > settings.retrieval_max_distance) and not relevance["fts_hit"]:
+        return []
+
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             _SQL,

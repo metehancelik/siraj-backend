@@ -12,6 +12,7 @@ Embedding servisi (TEI) ve Postgres çalışıyor olmalı.
 import argparse
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -24,7 +25,12 @@ from app.embeddings import embed  # noqa: E402
 from ingest.chunkers import Chunk, chunk_record  # noqa: E402
 
 SOURCES = ["meal", "tefsir", "hadis", "fetva", "dia"]
-EMBED_BATCH = 64
+# TEI istek başına en fazla 32 metin kabul eder (max_client_batch_size); 32'yi aşınca 413.
+# CPU'da büyük chunk'larda (tefsir/dia) yanıt yavaş, o yüzden varsayılan küçük tutulur.
+EMBED_BATCH = int(os.environ.get("EMBED_BATCH", "16"))
+# Bir embed isteği için timeout (sn) ve geçici hatada tekrar deneme sayısı.
+EMBED_TIMEOUT = float(os.environ.get("EMBED_TIMEOUT", "300"))
+EMBED_RETRIES = int(os.environ.get("EMBED_RETRIES", "5"))
 UPSERT_BATCH = 500
 
 UPSERT_SQL = """
@@ -56,9 +62,29 @@ def iter_chunks(data_dir: Path, source: str, limit: int) -> list[tuple[str, Chun
     return out
 
 
+async def _embed_with_retry(texts: list[str], client: httpx.AsyncClient) -> list[list[float]]:
+    """Geçici TEI hatalarında (timeout, bağlantı, 5xx) tekrar dener; kalıcı hatada (4xx) hemen fırlatır."""
+    for attempt in range(1, EMBED_RETRIES + 1):
+        try:
+            return await embed(texts, kind="passage", client=client)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code < 500 or attempt == EMBED_RETRIES:
+                raise
+            reason = f"HTTP {exc.response.status_code}"
+        except httpx.HTTPError as exc:
+            if attempt == EMBED_RETRIES:
+                raise
+            reason = type(exc).__name__
+        wait = min(30, 3 * attempt)
+        print(f"  embed hatası ({attempt}/{EMBED_RETRIES}): {reason}; {wait}s sonra tekrar",
+              flush=True)
+        await asyncio.sleep(wait)
+    raise RuntimeError("unreachable")
+
+
 async def _embed_and_upsert(pool: asyncpg.Pool, client: httpx.AsyncClient,
                             batch: list[tuple[str, Chunk]]) -> None:
-    vecs = await embed([c.content for _, c in batch], kind="passage", client=client)
+    vecs = await _embed_with_retry([c.content for _, c in batch], client)
     rows = [
         (src, c.ref_id, c.chunk_index, c.title, c.url, c.content,
          json.dumps(c.meta, ensure_ascii=False), _vec_literal(v))
@@ -76,11 +102,22 @@ async def run(data_dir: Path, sources: list[str], limit: int) -> None:
         async with pool.acquire() as conn:
             await conn.execute(schema_path.read_text(encoding="utf-8"))
     total = 0
-    async with httpx.AsyncClient(timeout=180) as client:
+    async with httpx.AsyncClient(timeout=EMBED_TIMEOUT, trust_env=False) as client:
         for source in sources:
             print(f"[{source}] bölümleniyor...")
             chunks = iter_chunks(data_dir, source, limit)
-            print(f"[{source}] {len(chunks)} chunk, embed + yükleme başlıyor")
+            # Devam edebilirlik: zaten yüklü chunk'ları atla → yeniden çalıştırma ucuz,
+            # her deploy'da güvenle koşabilir (dolu DB'de saniyeler sürer).
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT ref_id, chunk_index FROM chunks WHERE source=$1", source)
+            existing = {(r["ref_id"], r["chunk_index"]) for r in rows}
+            if existing:
+                before = len(chunks)
+                chunks = [(s, c) for (s, c) in chunks
+                          if (c.ref_id, c.chunk_index) not in existing]
+                print(f"[{source}] {len(existing)} zaten yüklü, {before - len(chunks)} atlandı")
+            print(f"[{source}] {len(chunks)} yeni chunk, embed + yükleme başlıyor")
             done = 0
             pending: list[tuple[str, Chunk]] = []
             for item in chunks:

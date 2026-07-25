@@ -5,8 +5,13 @@
 
 services:
   backend:
-    image: ${SIRAJ_IMAGE:-YOUR_DOCKERHUB_USER/siraj-backend:latest}
+    image: ${SIRAJ_IMAGE:-metehancelik/siraj-backend:latest}
     restart: unless-stopped
+    # LiteLLM aynı sunucuda; backend'in host'un yayınlanan portuna (LiteLLM) ulaşması için.
+    # Böylece LLM_BASE_URL=http://host.docker.internal:<litellm-host-portu>/v1 ile
+    # public URL'i (Cloudflare) atlar → sunucu IP'sinin engellenmesi sorunu ortadan kalkar.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: postgresql://siraj:${POSTGRES_PASSWORD}@db:5432/siraj
       # Embedding: varsayılan olarak gömülü TEI'ye doğrudan (kutudan çıktığı gibi çalışır).
@@ -31,13 +36,11 @@ services:
       embeddings:
         condition: service_started
 
-  # bge-m3 embedding servisi (CPU imajı). İlk açılışta modeli (~2GB) indirir.
+  # bge-m3 embedding servisi. Model imaja GÖMÜLÜ (Dockerfile.embeddings) → çalışma anında
+  # HF indirmesi YOK, dolayısıyla sunucudaki bozuk proxy env'i sorun çıkarmaz.
   embeddings:
-    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    image: ${SIRAJ_EMBEDDINGS_IMAGE:-metehancelik/siraj-embeddings:latest}
     restart: unless-stopped
-    command: --model-id BAAI/bge-m3
-    volumes:
-      - tei-data:/data
 
   # pgvector'lü Postgres. Kendi Postgres'inizi kullanacaksanız bu servisi silip
   # backend'in DATABASE_URL'ini kendi sunucunuza yöneltin ve schema.sql'i elle uygulayın.
@@ -60,7 +63,7 @@ services:
   # Varsayılan deploy'da başlamaz (profile). Elle tetiklenir:
   #   docker compose --profile ingest run --rm ingest
   ingest:
-    image: ${SIRAJ_IMAGE:-YOUR_DOCKERHUB_USER/siraj-backend:latest}
+    image: ${SIRAJ_IMAGE:-metehancelik/siraj-backend:latest}
     profiles: ["ingest"]
     restart: "no"
     command: python -m ingest.ingest --data-dir /app/data
@@ -82,5 +85,4 @@ services:
         condition: service_started
 
 volumes:
-  tei-data:
   db-data:

@@ -30,6 +30,14 @@ gibi aktarıcı bir dil kullan. Görüş ayrılığı varsa belirt.
 6. Namaz vakti, bugünün içeriği gibi uygulama verisiyle ilgili sorular sana kaynak olarak \
 gelmez; böyle bir şey sorulursa uygulamanın ilgili ekranına yönlendir."""
 
+# Kullanıcının mesajı selamlaşma/teşekkür/kısa sohbet ise (bkz. app/intent.py) retrieval hiç
+# çalıştırılmaz; bu daha kısa promptla hem gereksiz ayet göstermeyi önler hem yanıtı hızlandırır.
+CHITCHAT_SYSTEM_PROMPT = """Sen "Siraj"sın: Türkçe konuşan Müslümanlara yardımcı olan, sıcak, \
+samimi ve saygılı bir dijital din arkadaşı. Kullanıcı şu anda dinî bir soru sormadı, günlük bir \
+selam, teşekkür veya kısa bir sohbet mesajı yazdı. Kısa (1-2 cümle), sıcak ve samimi bir şekilde \
+karşılık ver. Kaynak göstermene, ayet/hadis alıntılamana gerek yok — sadece tabii bir sohbet \
+arkadaşı gibi yanıt ver. Türkçe cevap ver."""
+
 
 def _clip(text: str) -> str:
     limit = settings.max_chunk_chars

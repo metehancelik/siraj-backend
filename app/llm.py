@@ -20,7 +20,8 @@ async def stream_completion(messages: list[dict]) -> AsyncIterator[str]:
         "max_tokens": settings.llm_max_tokens,
         "messages": messages,
     }
-    async with httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=15.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=15.0),
+                                 trust_env=False) as client:
         async with client.stream("POST", url, headers=headers, json=payload) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():

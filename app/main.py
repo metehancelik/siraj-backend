@@ -17,8 +17,9 @@ from pydantic import BaseModel
 
 from .config import settings
 from .db import close_pool, get_pool, migrate
+from .intent import is_chitchat
 from .llm import stream_completion
-from .prompt import SOURCE_LABELS, SYSTEM_PROMPT, build_user_message
+from .prompt import CHITCHAT_SYSTEM_PROMPT, SOURCE_LABELS, SYSTEM_PROMPT, build_user_message
 from .retrieval import retrieve
 
 app = FastAPI(title="Siraj RAG")
@@ -77,11 +78,17 @@ async def _chat_stream(messages: list[Message]) -> AsyncIterator[str]:
         yield _sse({"type": "error", "message": "Boş soru"})
         return
 
-    try:
-        passages = await retrieve(question)
-    except Exception as exc:  # retrieval/embedding hatası
-        yield _sse({"type": "error", "message": f"Kaynak getirme hatası: {exc}"})
-        return
+    # Selamlaşma/teşekkür/kısa sohbet mesajlarında retrieval'ı hiç çalıştırma: vektör araması
+    # "en yakın komşu" mantığıyla çalıştığı için "merhaba" gibi mesajlarda bile en yakın
+    # pasajları getirir. Bu, hem alakasız kaynak göstermeyi önler hem yanıtı hızlandırır.
+    chitchat = is_chitchat(question)
+    passages = []
+    if not chitchat:
+        try:
+            passages = await retrieve(question)
+        except Exception as exc:  # retrieval/embedding hatası
+            yield _sse({"type": "error", "message": f"Kaynak getirme hatası: {exc}"})
+            return
 
     sources = [{
         "n": i, "source": p.source,
@@ -90,12 +97,13 @@ async def _chat_stream(messages: list[Message]) -> AsyncIterator[str]:
     } for i, p in enumerate(passages, start=1)]
     yield _sse({"type": "sources", "sources": sources})
 
-    # Geçmiş turları koru, son kullanıcı mesajını kaynaklarla zenginleştir.
+    # Geçmiş turları koru, son kullanıcı mesajını kaynaklarla (varsa) zenginleştir.
     history = [m for m in messages if m.role in ("user", "assistant")]
-    llm_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    llm_messages = [{"role": "system", "content": CHITCHAT_SYSTEM_PROMPT if chitchat else SYSTEM_PROMPT}]
     for m in history[:-1]:
         llm_messages.append({"role": m.role, "content": m.content})
-    llm_messages.append({"role": "user", "content": build_user_message(question, passages)})
+    last_content = question if chitchat else build_user_message(question, passages)
+    llm_messages.append({"role": "user", "content": last_content})
 
     answer_parts: list[str] = []
     try:

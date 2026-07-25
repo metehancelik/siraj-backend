@@ -76,17 +76,27 @@ pgvector Postgres `docker-compose.yml` ile bağlanır. Şema, backend ilk açıl
 > Postgres imajları ikisini de içerir. Yönetilen bir Postgres kullanıyorsanız bu
 > eklentilerin açık olduğundan emin olun.
 
-### 1) İmajı derleyip Docker Hub'a gönderin
+### 1) İki imajı derleyip Docker Hub'a gönderin
 
-Derleme bağlamı bu dizindir (`backend/`); veri gerekmez:
+Bu dizinden, iyi internetli makinenizde (sunucu amd64):
 
 ```bash
-cd backend
+cd siraj-backend
 docker login
-# Sunucu amd64 ise:
+
+# a) Backend (kod-only, küçük):
 docker buildx build --platform linux/amd64 \
-  -t <kullanici>/siraj-backend:latest --push .
+  -t metehancelik/siraj-backend:latest --push .
+
+# b) Embeddings (bge-m3 modeli GÖMÜLÜ TEI imajı, ~3.85GB):
+docker buildx build --platform linux/amd64 -f Dockerfile.embeddings \
+  -t metehancelik/siraj-embeddings:latest --push .
 ```
+
+> Neden gömülü embeddings imajı? Sunucudaki bozuk proxy env'i, standart TEI'nin çalışma
+> anında HuggingFace'ten model indirmesini engelliyordu ("relative URL without a base").
+> Model imaja gömülü olduğu için TEI hiç indirme yapmaz → sorun ortadan kalkar. Ayrıca
+> TEI'nin CPU imajı ONNX kullanır (safetensors değil), o yüzden bge-m3'ün onnx ağırlıkları gömülür.
 
 ### 2) Coolify'da compose ile çalıştırın
 
@@ -95,16 +105,18 @@ değişkenlerini girin:
 
 | Değişken | Örnek |
 |---|---|
-| `SIRAJ_IMAGE` | `<kullanici>/siraj-backend:latest` |
+| `SIRAJ_IMAGE` | `metehancelik/siraj-backend:latest` |
 | `POSTGRES_PASSWORD` | güçlü bir parola |
 | `LLM_BASE_URL` | `http://<llama-cpp-host>:8080/v1` (kendi modeliniz) |
 | `LLM_API_KEY` | anahtarınız (yoksa boş) |
 | `LLM_MODEL` | `gemma-3-4b-it` (CPU önerisi) |
 | `API_TOKEN` | mobil uygulamanın göndereceği Bearer (boş = kimlik doğrulama kapalı) |
 
-Deploy edince: `backend` (:8000), `embeddings` (TEI, ilk açılışta ~2GB model indirir) ve
-`db` (pgvector) ayağa kalkar. Backend şemayı otomatik uygular. Coolify'da 8000'i bir
+Deploy edince: `backend` (:8000), `embeddings` (TEI — model gömülü, indirme yok, hemen "Ready")
+ve `db` (pgvector) ayağa kalkar. Backend şemayı otomatik uygular. Coolify'da 8000'i bir
 domain'e bağlayın (reverse proxy SSE için buffering'i kapatmalı — aşağıdaki nginx notu).
+
+`POSTGRES_PASSWORD` **boş olamaz** (boşsa pgvector başlamaz, backend "connection refused" alır).
 
 ### 3) Ingest'i sonra başlatma
 

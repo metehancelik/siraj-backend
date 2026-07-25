@@ -104,6 +104,14 @@ def clean_dia(text: str) -> tuple[str, str | None]:
     return body, author
 
 
+def _numbered_title(title: str | None, index: int, total: int) -> str | None:
+    """Aynı kayıttan birden fazla pencere/chunk çıkarsa hepsi aynı başlığı taşır ->
+    kaynak listesinde birbirinden ayırt edilemez görünür. Tek pencerede dokunma."""
+    if not title or total <= 1:
+        return title
+    return f"{title} — {index + 1}. bölüm"
+
+
 def chunk_record(source: str, rec: dict) -> list[Chunk]:
     ref_id = rec.get("id", "").split(":", 1)[-1] or rec.get("id", "")
     title = rec.get("title")
@@ -135,11 +143,14 @@ def chunk_record(source: str, rec: dict) -> list[Chunk]:
         body, author = clean_dia(text)
         meta = {**meta, "author": author, "madde": title}
         windows = _window(body)
-        # Her pencereye madde başlığını ekle ki bağlam kopmasın.
-        return [Chunk(ref_id, i, title, url,
+        # Aynı maddenin birden fazla penceresi aynı başlığı taşırsa (ör. mobil
+        # uygulamada kaynak listesinde) birbirinden ayırt edilemez görünür ->
+        # birden fazla pencere varsa bölüm no'su ekle.
+        return [Chunk(ref_id, i, _numbered_title(title, i, len(windows)), url,
                       (f"{title}: {w}" if title else w), meta)
                 for i, w in enumerate(windows)]
 
     # tefsir, hadis -> pencerele
     windows = _window(text)
-    return [Chunk(ref_id, i, title, url, w, meta) for i, w in enumerate(windows)]
+    return [Chunk(ref_id, i, _numbered_title(title, i, len(windows)), url, w, meta)
+            for i, w in enumerate(windows)]
