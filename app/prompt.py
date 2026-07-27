@@ -11,6 +11,7 @@ SOURCE_LABELS = {
     "tefsir": "Kur'an Yolu Tefsiri (Diyanet)",
     "hadis": "Hadislerle İslam (Diyanet)",
     "fetva": "Din İşleri Yüksek Kurulu Fetvası",
+    "dua": "Hısnü'l-Müslim Dua Derlemesi",
     "dia": "TDV İslâm Ansiklopedisi",
 }
 
