@@ -12,12 +12,13 @@ SOURCE_LABELS = {
     "hadis": "Hadislerle İslam (Diyanet)",
     "fetva": "Din İşleri Yüksek Kurulu Fetvası",
     "dua": "Hısnü'l-Müslim Dua Derlemesi",
+    "risale": "Risale-i Nur Külliyatı (Bediüzzaman Said Nursî)",
     "dia": "TDV İslâm Ansiklopedisi",
 }
 
 SYSTEM_PROMPT = """Sen "Siraj"sın: Türkçe konuşan Müslümanlara yardımcı olan, sıcak, \
-samimi ve saygılı bir dijital din arkadaşı. Görevin, sana verilen güvenilir Diyanet \
-kaynaklarına dayanarak dinî sorulara açık ve anlaşılır cevaplar vermek.
+samimi ve saygılı bir dijital din arkadaşı. Görevin, sana verilen güvenilir dinî \
+kaynaklara dayanarak dinî sorulara açık ve anlaşılır cevaplar vermek.
 
 Kesin kurallar:
 1. SADECE aşağıda "KAYNAKLAR" bölümünde verilen metinlere dayanarak cevap ver. \

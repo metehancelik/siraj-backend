@@ -1,9 +1,9 @@
 # Siraj RAG Backend
 
-Diyanet kaynaklarından (meal, tefsir, hadis, fetva, TDV İslâm Ansiklopedisi) toplanan
-veriyle çalışan, mobil sohbet için **kaynağa dayalı (RAG)** backend. Kendi `gemma-4-12b`
-modelinize (OpenAI-uyumlu endpoint) bağlanır, cevapları yalnızca getirilen Diyanet
-metinlerine dayandırır ve her cevaba tıklanabilir kaynak listesi ekler.
+Güvenilir dinî kaynaklardan (Diyanet meal/tefsir/hadis/fetva, TDV İslâm Ansiklopedisi,
+Risale-i Nur Külliyatı) toplanan veriyle çalışan, mobil sohbet için **kaynağa dayalı (RAG)**
+backend. Kendi `gemma-4-12b` modelinize (OpenAI-uyumlu endpoint) bağlanır, cevapları
+yalnızca getirilen metinlere dayandırır ve her cevaba tıklanabilir kaynak listesi ekler.
 
 ```
 Mobil uygulama ──POST /v1/chat (SSE)──▶ Backend ──┬─▶ TEI (bge-m3)  → soruyu embed'le
@@ -227,8 +227,9 @@ python -m ingest.ingest --data-dir ../data --source fetva --limit 50
 python -m ingest.ingest --data-dir ../data
 ```
 
-Bölümleme kaynağa göre yapılır: fetva bütün (Soru/Cevap), meal ayet ayet, tefsir/hadis/dia
-~300 token'lık pencerelere bölünür (dia'nın şablon başlık/dipnotu ve sekmeleri temizlenir).
+Bölümleme kaynağa göre yapılır: fetva bütün (Soru/Cevap), meal ayet ayet, tefsir/hadis/dia/
+risale ~300 token'lık pencerelere bölünür (dia'nın şablon başlık/dipnotu ve sekmeleri
+temizlenir; risale pencerelerinin başına bölümün külliyat içindeki yolu yazılır).
 
 ### 5) Getirim kalitesini kontrol edin (LLM'e geçmeden)
 

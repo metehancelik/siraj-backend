@@ -14,7 +14,7 @@ $$ SELECT unaccent('unaccent'::regdictionary, $1) $$;
 
 CREATE TABLE IF NOT EXISTS chunks (
     id          bigserial PRIMARY KEY,
-    source      text  NOT NULL,          -- meal | tefsir | hadis | fetva | dua | dia
+    source      text  NOT NULL,          -- meal | tefsir | hadis | fetva | dua | risale | dia
     ref_id      text  NOT NULL,          -- kaynak kaydın orijinal id'si
     chunk_index int   NOT NULL DEFAULT 0,
     title       text,

@@ -6,6 +6,7 @@ Her kaynağın doğal yapısı farklı, tek bir stratejiyle bölmek kaliteyi dü
 - tefsir: ayet tefsiri                   -> kısa ise bütün, uzunsa pencerele
 - hadis: dev cilt metinleri (PDF)        -> pencerele
 - dia  : ansiklopedi maddeleri (dev)     -> pencerele
+- risale: kitap bölümleri (1-148 sayfa)  -> pencerele, bölüm yolunu metne yaz
 """
 import re
 from dataclasses import dataclass
@@ -138,6 +139,15 @@ def chunk_record(source: str, rec: dict) -> list[Chunk]:
                                  {"sure_no": meta.get("sure_no"), "sure_name": sure, "ayet": ayet}))
             return out
         return [Chunk(ref_id, 0, title, url, text.strip(), meta)]
+
+    if source == "risale":
+        # Başlık, bölümün külliyat içindeki tam yolu ("Sözler / Onuncu Söz / ...").
+        # Osmanlıca ağırlıklı metinde tek bir pencere bağlamsız kalır; dia'daki gibi
+        # yolu metnin içine de yazıyoruz ki embedding hangi risalede olduğunu bilsin.
+        windows = _window(text)
+        return [Chunk(ref_id, i, _numbered_title(title, i, len(windows)), url,
+                      (f"{title}: {w}" if title else w), meta)
+                for i, w in enumerate(windows)]
 
     if source == "dia":
         body, author = clean_dia(text)

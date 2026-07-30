@@ -24,7 +24,7 @@ from app.config import settings  # noqa: E402
 from app.embeddings import embed  # noqa: E402
 from ingest.chunkers import Chunk, chunk_record  # noqa: E402
 
-SOURCES = ["meal", "tefsir", "hadis", "fetva", "dua", "dia"]
+SOURCES = ["meal", "tefsir", "hadis", "fetva", "dua", "risale", "dia"]
 # TEI istek başına en fazla 32 metin kabul eder (max_client_batch_size); 32'yi aşınca 413.
 # CPU'da büyük chunk'larda (tefsir/dia) yanıt yavaş, o yüzden varsayılan küçük tutulur.
 EMBED_BATCH = int(os.environ.get("EMBED_BATCH", "16"))

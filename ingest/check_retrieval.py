@@ -21,6 +21,7 @@ DEFAULT_QUESTIONS = [
     "Orucu bozan şeyler nelerdir?",
     "Zekat kimlere farzdır?",
     "Abdest nasıl alınır?",
+    "Bediüzzaman haşri nasıl ispat ediyor?",  # risale (Onuncu Söz) beklenir
     "Bugünün duası nedir?",  # uygulama durumu — alakasız gelmesi/boş kalması beklenir
 ]
 
