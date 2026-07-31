@@ -265,6 +265,11 @@ Yanıt `text/event-stream`, her satır `data: {json}`:
 | type | alanlar | anlamı |
 |---|---|---|
 | `sources` | `sources:[{n,source,label,title,url}]` | getirilen kaynaklar (üretimden önce, bir kez) |
+
+İstek gövdesi `{"messages":[...], "lang":"tr"|"en"}`. Korpüs tamamen Türkçe;
+`lang=en` geldiğinde bge-m3'ün çapraz-dilli gücü sayesinde İngilizce soru Türkçe pasajları
+getirir, model kaynakları Türkçe okuyup cevabı İngilizce yazar (kaynak etiketleri de
+İngilizceye çevrilir, başlıklar Türkçe kalır).
 | `delta` | `text` | üretilen metin parçası (çok kez) |
 | `done` | — | tamamlandı |
 | `error` | `message` | hata |

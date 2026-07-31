@@ -25,6 +25,17 @@ _FILLER_PHRASES = sorted([
     "kimsin", "sen kimsin", "adin ne", "ismin ne", "nesin sen", "sen nesin", "seni kim yapti",
     "tamam", "tamamdir", "peki", "anladim", "ok", "okey", "super", "harika", "guzel", "nice",
     "evet", "hayir", "olur", "olur mu",
+    # İngilizce arayüzde de aynı kalıplar geliyor; bunlar olmadan "thank you" gibi bir
+    # mesaj tam RAG akışını tetikleyip alakasız ayet gösteriyordu.
+    "assalamu alaikum", "asalamu alaikum", "salam alaikum", "walaikum salam", "salam",
+    "good morning", "good afternoon", "good evening", "good night",
+    "how are you", "how are you doing", "hows it going", "how is it going",
+    "whats up", "i am fine", "im fine", "im good", "i am good", "not bad",
+    "thanks", "thank you", "thanks a lot", "thank you so much", "many thanks",
+    "much appreciated", "appreciate it", "god bless you", "bless you",
+    "bye", "goodbye", "see you", "see you later", "take care",
+    "who are you", "what are you", "whats your name", "what is your name",
+    "yes", "no", "sure", "alright", "got it", "understood", "great", "awesome", "cool",
 ], key=len, reverse=True)
 
 _WORD_RE = re.compile(r"[^a-z0-9 ]+")
