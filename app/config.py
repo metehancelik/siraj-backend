@@ -43,7 +43,10 @@ class Settings(BaseSettings):
     # ve Türkçe FTS hiç devreye girmiyor. Bu yüzden soru önce Türkçeye çevrilip öyle
     # aranıyor; Türkçe uzayda eşik ve FTS ölçülmüş haliyle çalışır.
     translate_queries: bool = True
-    translate_max_tokens: int = 60
+    # Ölçüldüğünde uzun/çok cümleli sorular bile ~45 token'a sadeleşiyor; sınır yine de
+    # geniş tutuldu — üretim EOS'ta durduğu için yüksek tavan normal durumda maliyetsiz,
+    # buna karşılık kırpılmış bir sorgu çevrilmemiş sorgudan sessizce daha kötüdür.
+    translate_max_tokens: int = 100
     translate_timeout: float = 30.0
 
     api_token: str = ""

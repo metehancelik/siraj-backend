@@ -7,6 +7,7 @@ FTS ayarını burada düzeltmek, 1-2 dakikalık LLM turuyla hata ayıklamaktan �
 
     python -m ingest.check_retrieval
     python -m ingest.check_retrieval "kendi sorunuz"
+    python -m ingest.check_retrieval --lang en          # İngilizce yol (sorgu çevirisi)
 """
 import asyncio
 import sys
@@ -14,6 +15,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.retrieval import retrieve  # noqa: E402
+
+DEFAULT_QUESTIONS_EN = [
+    "How is ablution performed?",
+    "What invalidates the fast?",
+    "Who is required to pay zakat?",
+    "How does Bediuzzaman prove the resurrection?",
+    "How do I fix a Python import error?",  # alakasız — boş kalması beklenir
+]
 
 DEFAULT_QUESTIONS = [
     "Namaz nasıl kılınır?",
@@ -27,10 +36,16 @@ DEFAULT_QUESTIONS = [
 
 
 async def main() -> None:
-    questions = sys.argv[1:] or DEFAULT_QUESTIONS
+    args = sys.argv[1:]
+    lang = "tr"
+    if "--lang" in args:
+        i = args.index("--lang")
+        lang = args[i + 1]
+        del args[i:i + 2]
+    questions = args or (DEFAULT_QUESTIONS_EN if lang == "en" else DEFAULT_QUESTIONS)
     for q in questions:
-        print(f"\n{'='*70}\nSORU: {q}\n{'='*70}")
-        passages = await retrieve(q)
+        print(f"\n{'='*70}\nSORU [{lang}]: {q}\n{'='*70}")
+        passages = await retrieve(q, lang)
         if not passages:
             print("  (sonuç yok)")
             continue

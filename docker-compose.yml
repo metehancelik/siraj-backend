@@ -25,6 +25,8 @@ services:
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL: ${LLM_MODEL:-gemma-4-12b}
       API_TOKEN: ${API_TOKEN}
+      # Türkçe olmayan sorular aramadan önce Türkçeye çevrilir (bkz. README > İngilizce).
+      TRANSLATE_QUERIES: ${TRANSLATE_QUERIES:-true}
       TOP_K: "3"
       MAX_CHUNK_CHARS: "550"
       LLM_MAX_TOKENS: "320"
