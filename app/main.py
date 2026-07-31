@@ -94,7 +94,7 @@ async def _chat_stream(messages: list[Message], lang: str) -> AsyncIterator[str]
     passages = []
     if not chitchat:
         try:
-            passages = await retrieve(question)
+            passages = await retrieve(question, lang)
         except Exception as exc:  # retrieval/embedding hatası
             yield _sse({"type": "error", "message": f"{_RETRIEVAL_ERROR[lang]}: {exc}"})
             return

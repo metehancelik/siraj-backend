@@ -7,6 +7,26 @@ import httpx
 from .config import settings
 
 
+async def complete(messages: list[dict], max_tokens: int, temperature: float = 0.0) -> str:
+    """Akışsız tek seferlik tamamlama (kısa yardımcı işler için, ör. sorgu çevirisi)."""
+    url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if settings.llm_api_key:
+        headers["Authorization"] = f"Bearer {settings.llm_api_key}"
+    payload = {
+        "model": settings.llm_model,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "messages": messages,
+    }
+    async with httpx.AsyncClient(timeout=httpx.Timeout(settings.translate_timeout,
+                                                       connect=10.0),
+                                 trust_env=False) as client:
+        resp = await client.post(url, headers=headers, json=payload)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
+
+
 async def stream_completion(messages: list[dict]) -> AsyncIterator[str]:
     """messages: [{role, content}]. Üretilen metin parçalarını (delta) yield eder."""
     url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"

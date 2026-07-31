@@ -266,10 +266,15 @@ Yanıt `text/event-stream`, her satır `data: {json}`:
 |---|---|---|
 | `sources` | `sources:[{n,source,label,title,url}]` | getirilen kaynaklar (üretimden önce, bir kez) |
 
-İstek gövdesi `{"messages":[...], "lang":"tr"|"en"}`. Korpüs tamamen Türkçe;
-`lang=en` geldiğinde bge-m3'ün çapraz-dilli gücü sayesinde İngilizce soru Türkçe pasajları
-getirir, model kaynakları Türkçe okuyup cevabı İngilizce yazar (kaynak etiketleri de
-İngilizceye çevrilir, başlıklar Türkçe kalır).
+İstek gövdesi `{"messages":[...], "lang":"tr"|"en"}`. Korpüs tamamen Türkçe; `lang=en`
+geldiğinde soru önce Türkçeye çevrilip öyle aranır, model kaynakları Türkçe okuyup cevabı
+İngilizce yazar (kaynak etiketleri de İngilizceye çevrilir, başlıklar Türkçe kalır).
+
+Çeviri neden gerekli: İngilizce sorguyu doğrudan aratmak ölçüldüğünde çalışmadı — alaka
+eşiği (`retrieval_max_distance`) çapraz-dilli mesafelerde ayırt etmiyor ("What is the capital
+of France?" 0.31 alıp gerçek sorulardan yakın çıktı) ve `tsv` kolonu `to_tsvector('turkish')`
+olduğu için tam-metin araması hiç devreye girmiyor. Türkçeye çevrilince ikisi de ölçülüp
+ayarlanmış haliyle çalışır. Bedeli soru başına ~3-3,5 sn (tekrar eden sorular önbellekten).
 | `delta` | `text` | üretilen metin parçası (çok kez) |
 | `done` | — | tamamlandı |
 | `error` | `message` | hata |

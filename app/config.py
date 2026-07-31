@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 320
     llm_temperature: float = 0.3
 
+    # Korpüs Türkçe. Türkçe olmayan bir soruyu doğrudan aratmak çalışmıyor: ölçüldüğünde
+    # (2026-07-31) İngilizce sorularda mesafe 0.32-0.48 bandında sıkışıyor, alakalı ile
+    # alakasız ayrışmıyor ("Fransa'nın başkenti" 0.31 alıp gerçek sorulardan yakın çıktı)
+    # ve Türkçe FTS hiç devreye girmiyor. Bu yüzden soru önce Türkçeye çevrilip öyle
+    # aranıyor; Türkçe uzayda eşik ve FTS ölçülmüş haliyle çalışır.
+    translate_queries: bool = True
+    translate_max_tokens: int = 60
+    translate_timeout: float = 30.0
+
     api_token: str = ""
     cors_origins: str = "*"
 

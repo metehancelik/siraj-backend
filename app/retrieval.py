@@ -3,12 +3,20 @@
 Dini metinlerde Türkçe morfoloji (ekler) ve Arapça kökenli terimler için tek başına
 vektör araması yetmez; tam-metin araması tam terim eşleşmelerini yakalar. İkisinin
 sırası Reciprocal Rank Fusion ile harmanlanır.
+
+Korpüs tamamen Türkçe olduğu için arama da Türkçe yapılır: Türkçe olmayan sorular
+önce Türkçeye çevrilir (bkz. _translate_to_turkish ve config.translate_queries).
 """
+import logging
+from collections import OrderedDict
 from dataclasses import dataclass
 
 from .config import settings
 from .db import get_pool
 from .embeddings import embed_one
+from .llm import complete
+
+log = logging.getLogger("siraj")
 
 RRF_K = 60  # RRF sabiti; büyük değer sıralama farklarını yumuşatır
 
@@ -79,8 +87,53 @@ SELECT
 """
 
 
-async def retrieve(question: str) -> list[Passage]:
+_TRANSLATE_SYSTEM = (
+    "You translate a user's question into Turkish so it can be used as a search query "
+    "over a Turkish corpus of Islamic sources. Output ONLY the Turkish translation, "
+    "nothing else — no quotes, no explanation. Keep religious terms in the form a "
+    "Turkish speaker would use (ablution -> abdest, fasting -> oruç, alms -> zekât)."
+)
+# Uygulamanın hazır örnek soruları her açılışta aynı; küçük bir önbellek çeviri
+# çağrısının çoğunu tamamen atlatır.
+_TRANSLATION_CACHE: OrderedDict[str, str] = OrderedDict()
+_CACHE_MAX = 256
+
+
+async def _translate_to_turkish(question: str) -> str | None:
+    """Soruyu arama için Türkçeye çevirir; çeviri yapılamazsa None döner."""
+    key = question.strip()
+    cached = _TRANSLATION_CACHE.get(key)
+    if cached is not None:
+        _TRANSLATION_CACHE.move_to_end(key)
+        return cached
+    try:
+        turkish = await complete(
+            [{"role": "system", "content": _TRANSLATE_SYSTEM},
+             {"role": "user", "content": key}],
+            max_tokens=settings.translate_max_tokens,
+        )
+    except Exception as exc:
+        log.warning("sorgu çevirisi başarısız (%s), özgün soruyla aranıyor", exc)
+        return None
+    turkish = turkish.strip().strip('"').strip()
+    if not turkish:
+        return None
+    _TRANSLATION_CACHE[key] = turkish
+    if len(_TRANSLATION_CACHE) > _CACHE_MAX:
+        _TRANSLATION_CACHE.popitem(last=False)
+    return turkish
+
+
+async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
     import json
+
+    # Arama daima Türkçe yapılır (korpüsün dili); soru başka dildeyse önce çevrilir.
+    turkish_query = lang == "tr"
+    if not turkish_query and settings.translate_queries:
+        translated = await _translate_to_turkish(question)
+        if translated:
+            question = translated
+            turkish_query = True
 
     qvec = await embed_one(question, kind="query")
     pool = await get_pool()
@@ -92,8 +145,15 @@ async def retrieve(question: str) -> list[Passage]:
     # olmayan bir soruda bile bir şeyler döner. Ne semantik olarak yakın (mesafe eşiğin
     # altında) ne de tam-metin eşleşmesi varsa, bu soru bu külliyatla alakasızdır ->
     # boş dön (sahte/alakasız kaynak göstermemek için; bkz. app/prompt.py boş-passages yolu).
+    # Eşik ve FTS Türkçe sorgularla ölçülüp ayarlandı. Sorgu Türkçeye çevrilemediyse
+    # (çeviri kapalı veya hata verdi) bu kapı geçerli değil: ölçüldüğünde (2026-07-31)
+    # İngilizce sorularda alakalı ile alakasız ayrışmıyordu ve FTS hiç eşleşmiyordu.
+    # Bozuk bir kapıyla herkesi geri çevirmektense kapıyı atlayıp pasajları veriyoruz;
+    # alakasızsa modelin "kaynaklarda bulamadım" kuralı devreye girer.
     best_dist = relevance["best_dist"]
-    if (best_dist is None or best_dist > settings.retrieval_max_distance) and not relevance["fts_hit"]:
+    if turkish_query and (best_dist is None
+                          or best_dist > settings.retrieval_max_distance) \
+            and not relevance["fts_hit"]:
         return []
 
     async with pool.acquire() as conn:
