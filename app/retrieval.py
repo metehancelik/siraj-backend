@@ -8,6 +8,8 @@ Korpüs tamamen Türkçe olduğu için arama da Türkçe yapılır: Türkçe olm
 önce Türkçeye çevrilir (bkz. _translate_to_turkish ve config.translate_queries).
 """
 import logging
+import re
+import unicodedata
 from collections import OrderedDict
 from dataclasses import dataclass
 
@@ -36,20 +38,23 @@ def _vector_literal(vec: list[float]) -> str:
     return "[" + ",".join(f"{x:.7f}" for x in vec) + "]"
 
 
-# Türkçe FTS sorgusu: kullanıcı cümlesindeki kelimeleri OR'lu websearch sorgusuna çevirir.
+# Türkçe FTS sorgusu. websearch_to_tsquery kelimeleri AND'ler (hepsi eşleşmeli).
+# Eskiden '&' -> '|' ile OR'a çevriliyordu ("recall için AND çok katı" gerekçesiyle);
+# ölçüldüğünde (2026-07-31) bunun korpüsü zehirlediği görüldü: 'bir' lexeme'i
+# chunk'ların %76'sında geçtiği için OR sorgusu 200 binden fazla belge eşleştiriyor,
+# ts_rank_cd de uzun belgeleri ödüllendirdiğinden aynı birkaç dev fetva neredeyse HER
+# soruda ilk 3'e giriyordu. AND isabetli; hiç eşleşmezse FTS ayağı boş kalır ve
+# sıralamayı yalnızca vektör belirler — bu, gürültüden iyidir.
 _SQL = """
-WITH -- websearch_to_tsquery kelimeleri AND'ler (hepsi eşleşmeli) — RAG recall'ı için çok katı.
--- '&' -> '|' ile OR'a çeviririz: herhangi bir terim eşleşsin, ts_rank_cd sıralasın.
-q AS (
+WITH q AS (
     SELECT $1::vector AS emb,
-           NULLIF(replace(
-               websearch_to_tsquery('turkish', f_unaccent($2))::text, '&', '|'
-           ), '')::tsquery AS tsq
+           websearch_to_tsquery('turkish', f_unaccent($2)) AS tsq
 ),
 vec AS (
     SELECT id, row_number() OVER (ORDER BY embedding <=> (SELECT emb FROM q)) AS rnk
     FROM chunks
     WHERE embedding IS NOT NULL
+      AND ($6::text[] IS NULL OR source = ANY($6))
     ORDER BY embedding <=> (SELECT emb FROM q)
     LIMIT $3
 ),
@@ -59,6 +64,7 @@ fts AS (
     FROM chunks
     WHERE (SELECT tsq FROM q) IS NOT NULL
       AND tsv @@ (SELECT tsq FROM q)
+      AND ($6::text[] IS NULL OR source = ANY($6))
     LIMIT $3
 ),
 fused AS (
@@ -85,6 +91,31 @@ SELECT
         WHERE tsv @@ websearch_to_tsquery('turkish', f_unaccent($2))
     ) AS fts_hit;
 """
+
+
+# Kullanıcı ne tür bir kaynak istediğini söylediğinde aramayı oraya daraltırız.
+# Gerekçe (ölçüm, 2026-07-31): "Sabır hakkında bir ayet" sorusunda en yakın 6 komşunun
+# hepsi DİA maddesiydi; en iyi ayet 0.3055 ile top_k'ya hiç giremiyordu. Bu bir sıralama
+# hatası değil — bir kavramı anlatan ansiklopedi maddesi, o kavramdan bahseden TEK bir
+# ayetten kosinüs olarak gerçekten daha yakın (chunk'tan şablon öneki çıkarmak durumu
+# kötüleştiriyor: 0.3743 -> 0.4407). Kullanıcı "ayet" dediyse niyeti açıktır, kullanırız.
+_SOURCE_INTENT: list[tuple[re.Pattern, tuple[str, ...]]] = [
+    (re.compile(r"\b(ayet|ayeti|ayette|ayetler|sure|suresi|verse|verses)\b"), ("meal", "tefsir")),
+    (re.compile(r"\b(hadis|hadisi|hadiste|hadisler|hadith|hadiths|sunnet)\b"), ("hadis",)),
+    (re.compile(r"\b(dua|duasi|duayi|dualar|supplication|supplications)\b"), ("dua",)),
+    (re.compile(r"\b(fetva|fetvasi|fatwa)\b"), ("fetva",)),
+]
+
+
+def _detect_sources(question: str) -> list[str] | None:
+    """Soru açıkça bir kaynak türü istiyorsa o kaynakları döner, aksi halde None."""
+    folded = question.lower().replace("ı", "i").replace("â", "a").replace("î", "i")
+    folded = unicodedata.normalize("NFD", folded)
+    folded = "".join(c for c in folded if unicodedata.category(c) != "Mn")
+    for pattern, sources in _SOURCE_INTENT:
+        if pattern.search(folded):
+            return list(sources)
+    return None
 
 
 _TRANSLATE_SYSTEM = (
@@ -164,6 +195,7 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
             settings.candidate_k,
             RRF_K,
             settings.top_k,
+            _detect_sources(question),
         )
 
     out: list[Passage] = []
