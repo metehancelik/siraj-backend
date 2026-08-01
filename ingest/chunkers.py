@@ -9,6 +9,7 @@ Her kaynağın doğal yapısı farklı, tek bir stratejiyle bölmek kaliteyi dü
 - risale: kitap bölümleri (1-148 sayfa)  -> pencerele, bölüm yolunu metne yaz
 """
 import re
+import unicodedata
 from dataclasses import dataclass
 
 TARGET_CHARS = 1100   # ~300 token hedef
@@ -105,6 +106,35 @@ def clean_dia(text: str) -> tuple[str, str | None]:
     return body, author
 
 
+_MEAL_URL = ("https://kuran.diyanet.gov.tr/mushaf/kuran-meal-2/"
+             "{slug}-suresi-{sure_no}/ayet-{ayet}/diyanet-isleri-baskanligi-meali-1")
+
+
+def _sure_slug(name: str) -> str:
+    # "İ".lower() birleşik noktalı bir i üretir (i + U+0307); aksanları ayrıştırıp
+    # birleşik işaretleri atmak hem onu hem â/î/û/ş/ğ gibi harfleri tek adımda çözer.
+    slug = name.replace("İ", "i").replace("I", "i").replace("ı", "i").lower()
+    slug = unicodedata.normalize("NFD", slug)
+    slug = "".join(c for c in slug if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9]+", "-", slug).strip("-")
+
+
+def _meal_url(meta: dict, ayet: str, fallback: str | None) -> str | None:
+    """Ayete özel Diyanet meali bağlantısı.
+
+    Kayıt düzeyindeki URL surenin 1. ayetine bakar; onu bütün ayetlere vermek
+    "Nahl suresi 127. ayet" kaynağına tıklayan kullanıcıyı 1. ayete götürüyordu.
+    Yönlendirmeyi yoldaki sure NUMARASI yapıyor (slug kozmetik: 'x-suresi-16' de
+    'nahl-suresi-16' de aynı sayfayı açıyor), ayet numarası ise gerçekten gerekli.
+    Aralıklı ayetlerde ("2-4") aralığın başı kullanılır."""
+    sure_no = meta.get("sure_no")
+    sure_name = meta.get("sure_name")
+    if not sure_no or not sure_name or not ayet:
+        return fallback
+    return _MEAL_URL.format(slug=_sure_slug(str(sure_name)), sure_no=sure_no,
+                            ayet=str(ayet).split("-")[0])
+
+
 def _numbered_title(title: str | None, index: int, total: int) -> str | None:
     """Aynı kayıttan birden fazla pencere/chunk çıkarsa hepsi aynı başlığı taşır ->
     kaynak listesinde birbirinden ayırt edilemez görünür. Tek pencerede dokunma."""
@@ -135,7 +165,8 @@ def chunk_record(source: str, rec: dict) -> list[Chunk]:
                 ayet = v.get("ayet")
                 content = f"{sure} suresi, {ayet}. ayet meali: {v.get('text','')}"
                 out.append(Chunk(ref_id, idx,
-                                 f"{sure} suresi {ayet}. ayet", url, content,
+                                 f"{sure} suresi {ayet}. ayet",
+                                 _meal_url(meta, ayet, url), content,
                                  {"sure_no": meta.get("sure_no"), "sure_name": sure, "ayet": ayet}))
             return out
         return [Chunk(ref_id, 0, title, url, text.strip(), meta)]
