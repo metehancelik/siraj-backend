@@ -71,7 +71,7 @@ fused AS (
     SELECT id, SUM(w) AS score FROM (
         SELECT id, 1.0 / ($4 + rnk) AS w FROM vec
         UNION ALL
-        SELECT id, 1.0 / ($4 + rnk) AS w FROM fts
+        SELECT id, $7::float / ($4 + rnk) AS w FROM fts
     ) u
     GROUP BY id
 )
@@ -196,6 +196,7 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
             RRF_K,
             settings.top_k,
             _detect_sources(question),
+            settings.fts_weight,
         )
 
     out: list[Passage] = []

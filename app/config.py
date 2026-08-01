@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # yoksa) soru bu külliyatla alakasız sayılır, retrieval boş döner. Ölçüldü: alakalı
     # sorularda ~0.31-0.33, alakasızlarda ~0.55-0.58 (bkz. sohbet geçmişi/2026-07-21).
     retrieval_max_distance: float = 0.42
+    # Hibrit füzyonda tam-metin ayağının ağırlığı (vektör ayağı 1.0). Eşit ağırlıkta
+    # RRF, "iki ayakta birden görünme"yi "vektörde çok daha yakın olma"ya tercih ediyor:
+    # ölçüldüğünde (2026-08-01) "Orucu bozan şeyler nelerdir?" sorusunda ilmihal'in
+    # "ORUCU BOZAN ŞEYLER" bölümü dar fetvaların altında kalıyordu. 0.5'e düşürünce
+    # doğru bölüm öne geldi; 0.3 ile sonuç birebir aynı, yani 0.5 kararlı bir nokta.
+    fts_weight: float = 0.5
     llm_max_tokens: int = 320
     llm_temperature: float = 0.3
 

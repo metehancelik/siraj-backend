@@ -7,6 +7,7 @@ Her kaynağın doğal yapısı farklı, tek bir stratejiyle bölmek kaliteyi dü
 - hadis: dev cilt metinleri (PDF)        -> pencerele
 - dia  : ansiklopedi maddeleri (dev)     -> pencerele
 - risale: kitap bölümleri (1-148 sayfa)  -> pencerele, bölüm yolunu metne yaz
+- ilmihal: kitap bölümleri (PDF)         -> pencerele, bölüm yolunu metne yaz
 """
 import re
 import unicodedata
@@ -171,8 +172,8 @@ def chunk_record(source: str, rec: dict) -> list[Chunk]:
             return out
         return [Chunk(ref_id, 0, title, url, text.strip(), meta)]
 
-    if source == "risale":
-        # Başlık, bölümün külliyat içindeki tam yolu ("Sözler / Onuncu Söz / ...").
+    if source in ("risale", "ilmihal"):
+        # Başlık, bölümün eser içindeki tam yolu ("Sözler / Onuncu Söz / ...").
         # Osmanlıca ağırlıklı metinde tek bir pencere bağlamsız kalır; dia'daki gibi
         # yolu metnin içine de yazıyoruz ki embedding hangi risalede olduğunu bilsin.
         windows = _window(text)
