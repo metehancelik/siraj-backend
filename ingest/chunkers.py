@@ -2,6 +2,7 @@
 
 Her kaynağın doğal yapısı farklı, tek bir stratejiyle bölmek kaliteyi düşürür:
 - fetva: zaten kısa Soru/Cevap birimi  -> bütün bırak
+- sorular: Soru/Cevap, ama cevaplar uzun -> pencerele, soruyu her pencereye yaz
 - meal : ayet/ayet-grubu birimleri      -> ayet başına chunk
 - tefsir: ayet tefsiri                   -> kısa ise bütün, uzunsa pencerele
 - hadis: dev cilt metinleri (PDF)        -> pencerele
@@ -136,6 +137,21 @@ def _meal_url(meta: dict, ayet: str, fallback: str | None) -> str | None:
                             ayet=str(ayet).split("-")[0])
 
 
+_SORULAR_ACILIS = re.compile(r"(?m)^\s*Değerli\s+kardeşimiz[,;:]?\s*$\n?")
+_SORULAR_KAPANIS = re.compile(
+    r"(?m)^\s*Selam\s+ve\s+dua\s+ile\.*\s*$\n?(^\s*Sorularla\s+İslamiyet\s*$\n?)?")
+
+
+def _strip_sorular_boilerplate(text: str) -> str:
+    """Her cevabın başındaki hitabı ve sonundaki imzayı at.
+
+    ~40.000 kaydın tamamında birebir aynı olduğu için bilgi taşımıyor; kalırsa
+    her vektöre gürültü olarak girer ve kısa cevaplarda sinyalin kayda değer
+    bir bölümünü kaplar."""
+    text = _SORULAR_ACILIS.sub("", text)
+    return _SORULAR_KAPANIS.sub("", text).strip()
+
+
 def _numbered_title(title: str | None, index: int, total: int) -> str | None:
     """Aynı kayıttan birden fazla pencere/chunk çıkarsa hepsi aynı başlığı taşır ->
     kaynak listesinde birbirinden ayırt edilemez görünür. Tek pencerede dokunma."""
@@ -155,6 +171,16 @@ def chunk_record(source: str, rec: dict) -> list[Chunk]:
         # Soru/Cevap birimi tek parça; başlık soruyu içerir.
         return [Chunk(ref_id, 0, title, url, text.strip(),
                       {k: meta.get(k) for k in ("kategori", "alt_kategori", "tarih")})]
+
+    if source == "sorular":
+        # Cevaplar fetva'dakilerden çok daha uzun (10.000 karakteri bulabiliyor),
+        # bütün bırakılamaz. Pencerelendiğinde ilk pencere dışındakiler sorusuz
+        # kalıp bağlamsızlaşıyor -> soruyu her pencerenin başına yaz.
+        body = _strip_sorular_boilerplate(text)
+        windows = _window(body)
+        return [Chunk(ref_id, i, _numbered_title(title, i, len(windows)), url,
+                      (f"Soru: {title}\n{w}" if title and i else w), meta)
+                for i, w in enumerate(windows)]
 
     if source == "meal":
         # Her ayet (veya ayet-grubu) ayrı chunk; sure adı başlıkta.

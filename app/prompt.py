@@ -19,6 +19,7 @@ SOURCE_LABELS = {
         "dua": "Hısnü'l-Müslim Dua Derlemesi",
         "ilmihal": "Diyanet İlmihali",
         "risale": "Risale-i Nur Külliyatı (Bediüzzaman Said Nursî)",
+        "sorular": "Sorularla İslamiyet",
         "dia": "TDV İslâm Ansiklopedisi",
     },
     "en": {
@@ -29,6 +30,7 @@ SOURCE_LABELS = {
         "dua": "Hisn al-Muslim Supplication Collection",
         "ilmihal": "Catechism of the Diyanet (İlmihal)",
         "risale": "Risale-i Nur Collection (Bediüzzaman Said Nursi)",
+        "sorular": "Sorularla İslamiyet (Q&A)",
         "dia": "TDV Encyclopaedia of Islam",
     },
 }
