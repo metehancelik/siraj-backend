@@ -118,11 +118,25 @@ def _detect_sources(question: str) -> list[str] | None:
     return None
 
 
+# Korpüsün fetva/soru-cevap parçaları "Soru: <başlık> Cevap: ..." biçiminde saklandığı
+# için her parçanın vektörüne bir soru cümlesi hâkim; arama, korpüstekine benzer kurulmuş
+# sorulara belirgin biçimde yakın çıkıyor. Ölçüldüğünde (2026-08-03) "Kurban hakkında
+# hüküm nedir?" en yakın komşuya 0.7203 uzaklıktaydı ve kapıdan dönüyordu; aynı şeyi
+# soran "Kurban kesmenin hükmü nedir?" ise 0.2935 ile doğru fetvaları getiriyordu. Bu
+# yüzden çevirmenden düz bir çeviri değil, Türkçe bir soru-cevap sitesinde sorulacak
+# biçimde tam bir soru cümlesi isteniyor.
 _TRANSLATE_SYSTEM = (
     "You translate a user's question into Turkish so it can be used as a search query "
     "over a Turkish corpus of Islamic sources. Output ONLY the Turkish translation, "
-    "nothing else — no quotes, no explanation. Keep religious terms in the form a "
-    "Turkish speaker would use (ablution -> abdest, fasting -> oruç, alms -> zekât)."
+    "nothing else — no quotes, no explanation.\n"
+    "Write it the way the question would be titled on a Turkish Islamic Q&A site: a "
+    "complete, natural question ending in a question mark.\n"
+    "Use the specific verb the act takes rather than a generic frame — 'kurban kesmenin "
+    "hükmü nedir?' not 'kurban hakkında hüküm nedir?', 'evlenmenin şartları nelerdir?' "
+    "not 'evlilik şartları nelerdir'.\n"
+    "Keep religious terms in the classical Turkish form the sources use: ablution -> "
+    "abdest, ritual bath -> gusül, fasting -> oruç, alms -> zekât, resurrection -> haşir, "
+    "prayer -> namaz, pilgrimage -> hac, the hereafter -> ahiret."
 )
 # Uygulamanın hazır örnek soruları her açılışta aynı; küçük bir önbellek çeviri
 # çağrısının çoğunu tamamen atlatır.
