@@ -160,7 +160,36 @@ def _numbered_title(title: str | None, index: int, total: int) -> str | None:
     return f"{title} — {index + 1}. bölüm"
 
 
+# Dışa aktarımdan sızan NULL göstergeleri ve "içerik yok" kalıpları. Bunlar
+# anlamca boş olduğu için embedding'leri uzayın ortasına düşüyor ve her soruya
+# yakın çıkıyor (ölçüldü: '\N' alakasız sorulara 0.0967 uzaklıkta, gerçek bir
+# ayet 0.60+). Böyle bir parça alaka kapısını (retrieval_max_distance) geçince
+# "bu soru külliyatla ilgisiz" güvencesi sessizce devre dışı kalıyor.
+_PLACEHOLDER = {"\\n", "\\N", "-", "—", "…", "..."}
+# dia'da madde başlığı var ama gövdesi yok olan bölümler ("AT: İslâm Öncesi.").
+# Kısa ayetler sağlıklı davrandığı için bu sınır yalnızca dia'ya uygulanır.
+_MIN_DIA_BODY = 30
+
+
+def _anlamca_bos(content: str, source: str) -> bool:
+    s = content.strip()
+    if not s or s in _PLACEHOLDER:
+        return True
+    if source == "dia":
+        # dia chunk'ları "MADDE: gövde" biçiminde yazılıyor; gövdesi yok denecek
+        # kadar kısaysa parça madde başlığından ibarettir.
+        body = s.split(": ", 1)[-1]
+        return len(body.strip()) < _MIN_DIA_BODY
+    return False
+
+
 def chunk_record(source: str, rec: dict) -> list[Chunk]:
+    """Kaydı chunk'lara böler ve anlamca boş olanları eler."""
+    return [c for c in _chunk_record(source, rec)
+            if not _anlamca_bos(c.content, source)]
+
+
+def _chunk_record(source: str, rec: dict) -> list[Chunk]:
     ref_id = rec.get("id", "").split(":", 1)[-1] or rec.get("id", "")
     title = rec.get("title")
     url = rec.get("url")
