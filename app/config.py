@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     # "ORUCU BOZAN ŞEYLER" bölümü dar fetvaların altında kalıyordu. 0.5'e düşürünce
     # doğru bölüm öne geldi; 0.3 ile sonuç birebir aynı, yani 0.5 kararlı bir nokta.
     fts_weight: float = 0.5
+    # Vektör ayağı her soruda güvenilir değil: en yakın komşu retrieval_max_distance'ın
+    # ötesindeyse o soruda anlamsal arama fiilen çalışmıyor demektir ve sabit 0.5 ağırlık,
+    # tam-metin ayağının doğru cevabı taşıdığı hâlde yüzeye çıkmasını engelliyor (RRF
+    # yalnızca sıraya bakar, "bu eşleşme çok daha iyi"yi ifade edemez). Ölçüldüğünde
+    # (2026-08-03) "Abdest nasıl alınır?" sorusunda doğru fetva FTS'te 2. sıradaydı ama
+    # ilk 3'e giremiyordu; vektör zayıfken ağırlığı 3.0'a çıkarmak onu öne aldı. Vektörün
+    # güçlü olduğu sorular (oruç, zekât, teyemmüm, kurban) bu yoldan hiç etkilenmiyor.
+    fts_weight_weak_vector: float = 3.0
     llm_max_tokens: int = 320
     llm_temperature: float = 0.3
 

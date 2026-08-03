@@ -187,6 +187,12 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
             and not relevance["fts_hit"]:
         return []
 
+    # Vektör ayağı bu soruda işe yaramıyorsa (en yakın komşu eşiğin ötesinde) tam-metin
+    # ayağına ağırlık ver; aksi halde ölçülmüş 0.5'te kal. Bkz. config.fts_weight_weak_vector.
+    vektor_zayif = best_dist is None or best_dist > settings.retrieval_max_distance
+    fts_agirlik = (settings.fts_weight_weak_vector if vektor_zayif
+                   else settings.fts_weight)
+
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             _SQL,
@@ -196,7 +202,7 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
             RRF_K,
             settings.top_k,
             _detect_sources(question),
-            settings.fts_weight,
+            fts_agirlik,
         )
 
     out: list[Passage] = []
