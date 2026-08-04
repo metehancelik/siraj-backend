@@ -1,0 +1,200 @@
+{
+  "_comment": "Günün kartlarında elle seçilen günler. Boş bırakılan alan (hadis, dua) deterministik rotasyonda kalır; bu dosya yalnızca müdahaleyi taşır. Uygulanışı: python -m ingest.seed_schedule --file data/schedule.json",
+  "rows": [
+    {
+      "date": "2026-08-05",
+      "ayah_global": 159,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:62) -> Al-Baqara 2:152"
+    },
+    {
+      "date": "2026-08-06",
+      "ayah_global": 160,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:63) -> Al-Baqara 2:153"
+    },
+    {
+      "date": "2026-08-16",
+      "ayah_global": 193,
+      "note": "sıradaki ayet dönemin muhataplarına dönük polemik (An-Nahl 16:73) -> Al-Baqara 2:186"
+    },
+    {
+      "date": "2026-08-19",
+      "ayah_global": 262,
+      "note": "sıradaki ayet bağlamı olmadan anlaşılmayan bir temsil (An-Nahl 16:76) -> Al-Baqara 2:255"
+    },
+    {
+      "date": "2026-08-25",
+      "ayah_global": 293,
+      "note": "sıradaki ayet bir öncekinin devamı, tek başına eksik (An-Nahl 16:82) -> Al-Baqara 2:286"
+    },
+    {
+      "date": "2026-08-26",
+      "ayah_global": 301,
+      "note": "sıradaki ayet dönemin muhataplarına dönük polemik (An-Nahl 16:83) -> Aal-i-Imraan 3:8"
+    },
+    {
+      "date": "2026-08-27",
+      "ayah_global": 432,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:84) -> Aal-i-Imraan 3:139"
+    },
+    {
+      "date": "2026-08-28",
+      "ayah_global": 452,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:85) -> Aal-i-Imraan 3:159"
+    },
+    {
+      "date": "2026-08-29",
+      "ayah_global": 529,
+      "note": "sıradaki ayet dönemin muhataplarına dönük polemik (An-Nahl 16:86) -> An-Nisaa 4:36"
+    },
+    {
+      "date": "2026-08-30",
+      "ayah_global": 579,
+      "note": "sıradaki ayet bir öncekinin devamı, tek başına eksik (An-Nahl 16:87) -> An-Nisaa 4:86"
+    },
+    {
+      "date": "2026-08-31",
+      "ayah_global": 677,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:88) -> Al-Maaida 5:8"
+    },
+    {
+      "date": "2026-09-12",
+      "ayah_global": 951,
+      "note": "sıradaki ayet bir öncekinin devamı, tek başına eksik (An-Nahl 16:100) -> Al-An'aam 6:162"
+    },
+    {
+      "date": "2026-09-13",
+      "ayah_global": 1010,
+      "note": "sıradaki ayet dönemin muhataplarına dönük polemik (An-Nahl 16:101) -> Al-A'raaf 7:56"
+    },
+    {
+      "date": "2026-09-15",
+      "ayah_global": 1153,
+      "note": "sıradaki ayet dönemin muhataplarına dönük polemik (An-Nahl 16:103) -> Al-A'raaf 7:199"
+    },
+    {
+      "date": "2026-09-16",
+      "ayah_global": 1426,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:104) -> Yunus 10:62"
+    },
+    {
+      "date": "2026-09-17",
+      "ayah_global": 1718,
+      "note": "sıradaki ayet dönemin muhataplarına dönük polemik (An-Nahl 16:105) -> Ar-Ra'd 13:11"
+    },
+    {
+      "date": "2026-09-18",
+      "ayah_global": 1735,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:106) -> Ar-Ra'd 13:28"
+    },
+    {
+      "date": "2026-09-19",
+      "ayah_global": 1757,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:107) -> Ibrahim 14:7"
+    },
+    {
+      "date": "2026-09-20",
+      "ayah_global": 1851,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:108) -> Al-Hijr 15:49"
+    },
+    {
+      "date": "2026-09-21",
+      "ayah_global": 2052,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:109) -> Al-Israa 17:23"
+    },
+    {
+      "date": "2026-09-25",
+      "ayah_global": 2053,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:113) -> Al-Israa 17:24"
+    },
+    {
+      "date": "2026-09-27",
+      "ayah_global": 2099,
+      "note": "sıradaki ayet bir fıkhî hüküm parçası, günlük kart değil (An-Nahl 16:115) -> Al-Israa 17:70"
+    },
+    {
+      "date": "2026-09-29",
+      "ayah_global": 2109,
+      "note": "sıradaki ayet bir öncekinin devamı, tek başına eksik (An-Nahl 16:117) -> Al-Israa 17:80"
+    },
+    {
+      "date": "2026-09-30",
+      "ayah_global": 2791,
+      "note": "sıradaki ayet anlatının ortasından, tek başına bağlamsız (An-Nahl 16:118) -> Al-Muminoon 23:118"
+    },
+    {
+      "date": "2026-10-03",
+      "ayah_global": 2918,
+      "note": "sıradaki ayet bir öncekinin devamı, tek başına eksik (An-Nahl 16:121) -> Al-Furqaan 25:63"
+    },
+    {
+      "date": "2026-10-04",
+      "ayah_global": 2929,
+      "note": "sıradaki ayet bir öncekinin devamı, tek başına eksik (An-Nahl 16:122) -> Al-Furqaan 25:74"
+    },
+    {
+      "date": "2026-10-06",
+      "ayah_global": 3430,
+      "note": "sıradaki ayet bir fıkhî hüküm parçası, günlük kart değil (An-Nahl 16:124) -> Ar-Room 30:21"
+    },
+    {
+      "date": "2026-10-08",
+      "ayah_global": 3486,
+      "note": "sıradaki ayet anlatının ortasından, tek başına bağlamsız (An-Nahl 16:126) -> Luqman 31:17"
+    },
+    {
+      "date": "2026-10-12",
+      "ayah_global": 3574,
+      "note": "sıradaki ayet anlatının ortasından, tek başına bağlamsız (Al-Israa 17:2) -> Al-Ahzaab 33:41"
+    },
+    {
+      "date": "2026-10-13",
+      "ayah_global": 3665,
+      "note": "sıradaki ayet bir öncekinin devamı, tek başına eksik (Al-Israa 17:3) -> Faatir 35:5"
+    },
+    {
+      "date": "2026-10-14",
+      "ayah_global": 4111,
+      "note": "sıradaki ayet anlatının ortasından, tek başına bağlamsız (Al-Israa 17:4) -> Az-Zumar 39:53"
+    },
+    {
+      "date": "2026-10-15",
+      "ayah_global": 4252,
+      "note": "sıradaki ayet anlatının ortasından, tek başına bağlamsız (Al-Israa 17:5) -> Fussilat 41:34"
+    },
+    {
+      "date": "2026-10-16",
+      "ayah_global": 4315,
+      "note": "sıradaki ayet anlatının ortasından, tek başına bağlamsız (Al-Israa 17:6) -> Ash-Shura 42:43"
+    },
+    {
+      "date": "2026-10-18",
+      "ayah_global": 4622,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (Al-Israa 17:8) -> Al-Hujuraat 49:10"
+    },
+    {
+      "date": "2026-10-20",
+      "ayah_global": 4624,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (Al-Israa 17:10) -> Al-Hujuraat 49:12"
+    },
+    {
+      "date": "2026-10-26",
+      "ayah_global": 4625,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (Al-Israa 17:16) -> Al-Hujuraat 49:13"
+    },
+    {
+      "date": "2026-10-27",
+      "ayah_global": 4646,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (Al-Israa 17:17) -> Qaaf 50:16"
+    },
+    {
+      "date": "2026-10-28",
+      "ayah_global": 4731,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (Al-Israa 17:18) -> Adh-Dhaariyat 51:56"
+    },
+    {
+      "date": "2026-11-01",
+      "ayah_global": 4961,
+      "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (Al-Israa 17:22) -> Ar-Rahmaan 55:60"
+    }
+  ]
+}

@@ -179,8 +179,23 @@ Ingest-şeklinde bir iştir: `siraj-backend/CLAUDE.md` gereği **yerel Mac'ten, 
    görünen hiçbir şey değişmez; uzak yol ile yerel yol aynı kartı seçer. Doğrulaması da
    budur: aynı tarih için iki yol aynı `id`'yi vermeli.
 2. **Uygulama**, uzak yolu kullanmaya başlar, hata hâlinde yerele düşer.
-3. **Küratörlük**: `daily_schedule` satırları (Ramazan, Cuma, kandil; bağlamından koparılınca
-   kötü okunan ayetler).
+3. **Küratörlük**: `curation/schedule.json` + `python -m ingest.seed_schedule`. Doğrudan
+   INSERT değil, depoya işlenmiş bir dosya: `daily_schedule` satırları üretim verisidir ve
+   kodda görünmez; dosya olunca seçim aylar sonra diff'te okunabiliyor ve veritabanı
+   yeniden kurulduğunda tek komutla geri geliyor.
+
+   İlk parti: 5 Ağustos — 1 Kasım 2026 arası **39 gün**. Sıralı yürüyüşün o günlerde
+   verdiği ayet günlük kart olarak kötü okunuyordu; ölçüt üç başlıkta ve her satırın
+   notunda hangisi olduğu yazıyor (çıplak tehdit, bir önceki ayete bağlı parça, dönemin
+   muhataplarına dönük polemik; ayrıca fıkhî hüküm parçası ve anlatı ortası). 90 günün
+   39'u — yani bu bir istisna değil, yöntemin doğal sonucu.
+
+   Yalnızca ayet sabitlendi; hadis ve dua o günlerde de rotasyonda. İkisinin korpüsü zaten
+   küratörlükten geçmiş, sorun sıralı yürüyüşe özgü.
+
+   **Sırada:** Ramazan, Cuma ve kandil geceleri. Bunlar hicrî takvim gerektiriyor ve
+   Diyanet'in takvimi ile aritmetik takvimler bir gün kayabiliyor; tarihler resmî takvimle
+   doğrulanmadan yazılmamalı.
 
 ## Dua havuzu (yapıldı)
 
