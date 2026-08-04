@@ -6,16 +6,18 @@ Mobil protokolü (text/event-stream), her satır `data: {json}`:
   {"type":"done"}
   {"type":"error",   "message":"..."}
 """
+import datetime as dt
 import json
 import re
 from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from .config import settings
+from .daily import DailyUnavailable, build_daily
 from .db import close_pool, get_pool, migrate
 from .intent import is_chitchat
 from .llm import stream_completion
@@ -139,3 +141,31 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/v1/daily/{date}")
+async def daily(date: str, authorization: str | None = Header(default=None)):
+    """Günün ayeti, hadisi ve duası. Sözleşme: DAILY.md.
+
+    Tarih İSTEMCİNİN yerel takvim günüdür ve yolda gelir; sunucu `now()` kullanmaz, çünkü
+    okuyucunun saat dilimini bilemez ve gün onun gece yarısında dönmelidir. Tarih yolda
+    olduğu için cevap önbelleklenebilir.
+
+    Derlenemezse 503: uygulama bunu sessizce kendi yerel yoluna düşmek için okur, yani
+    kullanıcıya hata gösterilmez. 404 kullanılmaz — kayıtlı gün yoksa rotasyon devreye
+    girer, "gün yok" diye bir durum yoktur.
+    """
+    _check_auth(authorization)
+    try:
+        day = dt.date.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Tarih YYYY-AA-GG olmalı")
+
+    try:
+        payload = await build_daily(day)
+    except DailyUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    # Altı saat: bir tarihin içeriği normalde sabittir, ama küratör bir günü elle
+    # değiştirdiğinde bunun aynı gün yayılması gerekir.
+    return JSONResponse(payload, headers={"Cache-Control": "public, max-age=21600"})

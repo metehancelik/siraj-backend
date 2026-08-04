@@ -36,3 +36,53 @@ CREATE INDEX IF NOT EXISTS chunks_tsv_idx
 
 CREATE INDEX IF NOT EXISTS chunks_source_idx
     ON chunks (source);
+
+-- ---------------------------------------------------------------------------
+-- Günün kartları (/v1/daily). Sözleşme: DAILY.md
+--
+-- Bunlar `chunks` üzerinden karşılanamaz: chunks bir arama korpüsüdür (pencerelenmiş
+-- metin + embedding). Oradaki `hadis` kaynağı *Hadislerle İslam* cilt metnidir, kartın
+-- istediği kısa söz + ravi + derece değil. Kart korpüsü mobil uygulamanın paketinden
+-- tohumlanır: `python -m ingest.seed_daily --mobile ../siraj-mobile`.
+-- ---------------------------------------------------------------------------
+
+-- payload: mobildeki HadithContent / DuaContent, olduğu gibi. Uygulama ile aynı şekil
+-- olması, uzak yol ile çevrimdışı yolun aynı modeli üretmesi demek.
+-- ordinal: paketteki dizi sırası. Rotasyon buna göre yürüdüğü için iki taraf aynı gün
+-- aynı kaydı seçer.
+CREATE TABLE IF NOT EXISTS daily_hadith (
+    id      text  PRIMARY KEY,
+    ordinal int   NOT NULL UNIQUE,
+    payload jsonb NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS daily_dua (
+    id      text  PRIMARY KEY,
+    ordinal int   NOT NULL UNIQUE,
+    payload jsonb NOT NULL
+);
+
+-- Ayet metni alquran.cloud'dan bir kez alınıp burada durur; Türkçesi uygulamanın bugün
+-- gösterdiği Diyanet Vakfı meali (tr.vakfi), yani görünen çeviri değişmiyor. Kazanç,
+-- üçüncü tarafa her cihazın her gün değil sunucunun bir kez gitmesi.
+CREATE TABLE IF NOT EXISTS ayah_text (
+    global_number   int  PRIMARY KEY,
+    surah_number    int  NOT NULL,
+    number_in_surah int  NOT NULL,
+    surah_name_ar   text NOT NULL,
+    surah_name_en   text NOT NULL,
+    arabic          text NOT NULL,
+    translation_tr  text NOT NULL,
+    translation_en  text,
+    fetched_at      timestamptz NOT NULL DEFAULT now()
+);
+
+-- Yalnızca müdahale edilen günler; boş bırakılan alan o tür için rotasyona düşer.
+-- Her günü doldurmak gerekmez.
+CREATE TABLE IF NOT EXISTS daily_schedule (
+    date        date PRIMARY KEY,
+    ayah_global int,
+    hadith_id   text REFERENCES daily_hadith(id),
+    dua_id      text REFERENCES daily_dua(id),
+    note        text
+);
