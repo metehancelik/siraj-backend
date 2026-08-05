@@ -110,10 +110,11 @@ def _payload(value) -> dict | None:
     return json.loads(value) if isinstance(value, str) else value
 
 
-# İngilizce havuz bundan küçükse o kart İngilizcede hiç gösterilmez: dört kaydın arasında
-# dönen bir "günün duası" günlük olmaktan çıkar. Türkçe metni İngilizce arayüzde göstermek
-# ise hiç seçenek değil — uygulamayı İngilizce kullanan kişi İngilizce bir uygulama istiyor.
-MIN_POOL = 30
+# İngilizce havuz bundan küçükse o kart İngilizcede hiç gösterilmez: iki haftadan önce
+# tekrar eden bir kart "günün" kartı olmaktan çıkar. Türkçe metni İngilizce arayüzde
+# göstermek ise hiç seçenek değil. Sayı veriye göre değil bu ilkeye göre seçildi ve
+# mobildeki MIN_ENGLISH_POOL ile aynı olmalı.
+MIN_POOL = 14
 
 
 async def _rotating(
