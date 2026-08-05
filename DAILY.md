@@ -136,7 +136,7 @@ CREATE TABLE IF NOT EXISTS ayah_text (
     global_number  int PRIMARY KEY,
     arabic         text NOT NULL,
     translation_tr text NOT NULL,   -- tr.vakfi
-    translation_en text,            -- en.asad
+    translation_en text,            -- en.sahih (Saheeh International)
     surah_number   int  NOT NULL,
     number_in_surah int NOT NULL,
     surah_name_ar  text NOT NULL,

@@ -17,12 +17,14 @@ log = logging.getLogger("siraj")
 
 TOTAL_AYAHS = 6236
 
-# Uygulamanın `quranService.ts`'te kullandığı sürümlerin aynısı. tr.vakfi (Diyanet Vakfı
+# Uygulamanın `quranService.ts`'te kullandığı sürümlerin aynısı. İngilizce meal Saheeh
+# International: Asad ayetleri bir öncekinin devamı sayıp küçük harfle başlıyor ve arkaik
+# kuruyordu, tek başına duran bir kart için yanlış. tr.vakfi (Diyanet Vakfı
 # meali) bilerek korunuyor: uç noktanın döndürdüğü ayet, cihazın bugün doğrudan aldığının
 # birebir aynısı olmalı — değişen tek şey isteği kimin yaptığı.
-_EDITIONS = "quran-uthmani,en.asad,tr.vakfi"
+_EDITIONS = "quran-uthmani,en.sahih,tr.vakfi"
 _ARABIC_EDITION = "quran-uthmani"
-_ENGLISH_EDITION = "en.asad"
+_ENGLISH_EDITION = "en.sahih"
 _TURKISH_EDITION = "tr.vakfi"
 
 _EPOCH = dt.date(1970, 1, 1)
