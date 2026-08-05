@@ -82,7 +82,24 @@ CREATE TABLE IF NOT EXISTS ayah_text (
 CREATE TABLE IF NOT EXISTS daily_schedule (
     date        date PRIMARY KEY,
     ayah_global int,
-    hadith_id   text REFERENCES daily_hadith(id),
-    dua_id      text REFERENCES daily_dua(id),
+    hadith_id   text REFERENCES daily_hadith(id) ON DELETE SET NULL,
+    dua_id      text REFERENCES daily_dua(id) ON DELETE SET NULL,
     note        text
 );
+
+-- ON DELETE SET NULL sonradan eklendi; mevcut kurulumda kısıt eskisi gibi kalmasın.
+-- Gerekçesi davranışın kendisi: korpüsten bir kayıt düşerse (yanlış künye, kartlık
+-- olmayan içerik) o güne sabitlenmiş seçim kendiliğinden rotasyona düşmeli. Eskisi
+-- tohumlamayı kilitliyordu: seed_daily tabloyu boşaltıp yeniden yazdığı için, sabitlenmiş
+-- tek bir kayıt yüzünden bütün korpüs güncellemesi geri alınıyor ve bu SESSİZCE oluyordu.
+DO $$
+BEGIN
+    ALTER TABLE daily_schedule DROP CONSTRAINT IF EXISTS daily_schedule_hadith_id_fkey;
+    ALTER TABLE daily_schedule DROP CONSTRAINT IF EXISTS daily_schedule_dua_id_fkey;
+    ALTER TABLE daily_schedule
+        ADD CONSTRAINT daily_schedule_hadith_id_fkey
+        FOREIGN KEY (hadith_id) REFERENCES daily_hadith(id) ON DELETE SET NULL;
+    ALTER TABLE daily_schedule
+        ADD CONSTRAINT daily_schedule_dua_id_fkey
+        FOREIGN KEY (dua_id) REFERENCES daily_dua(id) ON DELETE SET NULL;
+END $$;

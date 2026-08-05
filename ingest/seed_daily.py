@@ -85,7 +85,12 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true",
                         help="yalnızca oku ve say, yazma")
     args = parser.parse_args()
-    asyncio.run(seed(Path(args.mobile).resolve(), args.dry_run))
+    try:
+        asyncio.run(seed(Path(args.mobile).resolve(), args.dry_run))
+    except Exception as exc:  # noqa: BLE001 - çıkış kodu önemli
+        # Sessiz başarısızlık en kötüsü: bir kez olduğunda tohumlama geri alınmış ama
+        # özet satırları basılmış oluyor ve veritabanı eski korpüsle kalıyor.
+        raise SystemExit(f"TOHUMLAMA BAŞARISIZ: {exc}")
 
 
 if __name__ == "__main__":
