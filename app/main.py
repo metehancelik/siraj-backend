@@ -144,12 +144,16 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
 
 
 @app.get("/v1/daily/{date}")
-async def daily(date: str, authorization: str | None = Header(default=None)):
+async def daily(date: str, lang: str = "tr", authorization: str | None = Header(default=None)):
     """Günün ayeti, hadisi ve duası. Sözleşme: DAILY.md.
 
     Tarih İSTEMCİNİN yerel takvim günüdür ve yolda gelir; sunucu `now()` kullanmaz, çünkü
     okuyucunun saat dilimini bilemez ve gün onun gece yarısında dönmelidir. Tarih yolda
     olduğu için cevap önbelleklenebilir.
+
+    `lang=en` verildiğinde hadis ve dua yalnızca İngilizcesi olan kayıtlar arasından
+    seçilir; havuz yetmiyorsa o kart null döner. Uygulamayı İngilizce kullanan kişiye
+    Türkçe metin göstermek seçenek değil.
 
     Derlenemezse 503: uygulama bunu sessizce kendi yerel yoluna düşmek için okur, yani
     kullanıcıya hata gösterilmez. 404 kullanılmaz — kayıtlı gün yoksa rotasyon devreye
@@ -162,7 +166,7 @@ async def daily(date: str, authorization: str | None = Header(default=None)):
         raise HTTPException(status_code=400, detail="Tarih YYYY-AA-GG olmalı")
 
     try:
-        payload = await build_daily(day)
+        payload = await build_daily(day, lang)
     except DailyUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 

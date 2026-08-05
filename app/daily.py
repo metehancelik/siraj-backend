@@ -108,8 +108,32 @@ def _payload(value) -> dict | None:
     return json.loads(value) if isinstance(value, str) else value
 
 
-async def _rotating(conn: asyncpg.Connection, table: str, day: int) -> dict:
-    """`table`'dan günün kaydı: paketteki sırayla aynı rotasyon."""
+# İngilizce havuz bundan küçükse o kart İngilizcede hiç gösterilmez: dört kaydın arasında
+# dönen bir "günün duası" günlük olmaktan çıkar. Türkçe metni İngilizce arayüzde göstermek
+# ise hiç seçenek değil — uygulamayı İngilizce kullanan kişi İngilizce bir uygulama istiyor.
+MIN_POOL = 30
+
+
+async def _rotating(
+    conn: asyncpg.Connection, table: str, day: int, english_field: str | None
+) -> dict | None:
+    """`table`'dan günün kaydı: paketteki sırayla aynı rotasyon.
+
+    `english_field` verildiğinde havuz yalnızca o alanı dolu olan kayıtlara daralır ve
+    sıra bu daraltılmış küme üzerinde yürür. Havuz `MIN_POOL`'un altındaysa kart yok
+    sayılır (None) — çağıran onu cevaptan düşürür.
+    """
+    if english_field:
+        rows = await conn.fetch(
+            f"""SELECT payload FROM {table}
+                 WHERE coalesce(payload ->> $1, '') <> ''
+                 ORDER BY ordinal""",
+            english_field,
+        )
+        if len(rows) < MIN_POOL:
+            return None
+        return _payload(rows[day % len(rows)]["payload"])
+
     total = await conn.fetchval(f"SELECT count(*) FROM {table}")
     if not total:
         raise DailyUnavailable(f"{table} boş — tohumlama yapılmamış (bkz. DAILY.md)")
@@ -125,7 +149,7 @@ async def _pinned(conn: asyncpg.Connection, table: str, record_id: str) -> dict 
     return _payload(await conn.fetchval(f"SELECT payload FROM {table} WHERE id = $1", record_id))
 
 
-async def build_daily(day: dt.date) -> dict:
+async def build_daily(day: dt.date, lang: str = "tr") -> dict:
     """Verilen YEREL takvim günü için üç kartı derler.
 
     Önce `daily_schedule`'a bakılır; satır yoksa (ya da bir alanı boşsa) deterministik
@@ -133,6 +157,7 @@ async def build_daily(day: dt.date) -> dict:
     elle doldurmak gerekmez.
     """
     index = days_since_epoch(day)
+    english = lang.lower().startswith("en")
     pool = await get_pool()
     async with pool.acquire() as conn:
         pinned = await conn.fetchrow(
@@ -148,8 +173,13 @@ async def build_daily(day: dt.date) -> dict:
         if pinned and pinned["dua_id"]:
             dua = await _pinned(conn, "daily_dua", pinned["dua_id"])
 
-        hadith = hadith or await _rotating(conn, "daily_hadith", index)
-        dua = dua or await _rotating(conn, "daily_dua", index)
+        hadith = hadith or await _rotating(
+            conn, "daily_hadith", index, "textEn" if english else None
+        )
+        dua = dua or await _rotating(conn, "daily_dua", index, "english" if english else None)
         ayah = await _ayah(conn, ayah_global)
 
-    return {"date": day.isoformat(), "ayah": ayah, "hadith": hadith, "dua": dua}
+    # Ayet her dilde var (üç sürüm birlikte saklanıyor); hadis ve dua İngilizce havuzu
+    # yetmediğinde null döner ve uygulama o kartı hiç çizmez.
+    return {"date": day.isoformat(), "lang": "en" if english else "tr",
+            "ayah": ayah, "hadith": hadith, "dua": dua}

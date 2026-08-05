@@ -38,9 +38,15 @@ kırpmak, ağı olmayan kullanıcı için sessiz bir gerileme olurdu. `fetchWith
 ## Uç nokta
 
 ```
-GET /v1/daily/{date}
+GET /v1/daily/{date}?lang=tr|en
 Authorization: Bearer <RAG_API_TOKEN>     # /v1/chat ile aynı
 ```
+
+`lang=en` verildiğinde hadis ve dua yalnızca İngilizcesi olan kayıtlar arasından seçilir;
+havuz `MIN_POOL`'un (30) altındaysa o kart **null** döner ve uygulama kartı hiç çizmez.
+Uygulamayı İngilizce kullanan kişiye Türkçe metin gösterip altına "Turkish translation"
+yazmak bir çözüm değil, özürdü. Ayet her dilde var (üç sürüm birlikte saklanıyor), o yüzden
+hiç null dönmez.
 
 `date`, **uygulamanın yerel takvim günü** (`YYYY-MM-DD`) — sunucu `now()` kullanmaz. Sunucu
 okuyucunun saat dilimini bilemez ve gün, kullanıcının gece yarısında dönmelidir
