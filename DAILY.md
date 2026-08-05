@@ -199,9 +199,14 @@ Ingest-şeklinde bir iştir: `siraj-backend/CLAUDE.md` gereği **yerel Mac'ten, 
    Yalnızca ayet sabitlendi; hadis ve dua o günlerde de rotasyonda. İkisinin korpüsü zaten
    küratörlükten geçmiş, sorun sıralı yürüyüşe özgü.
 
-   **Sırada:** Ramazan, Cuma ve kandil geceleri. Bunlar hicrî takvim gerektiriyor ve
-   Diyanet'in takvimi ile aritmetik takvimler bir gün kayabiliyor; tarihler resmî takvimle
-   doğrulanmadan yazılmamalı.
+   **Kandil günleri (yapıldı, 2026):** tarihler Diyanet'in kendi takviminden alındı
+   (`vakithesaplama.diyanet.gov.tr/dinigunler.php?yil=2026`) — aritmetik hicrî takvimler
+   Diyanet'inkinden bir gün kayabildiği için hesaplanmadı, resmî listeden okundu.
+   - 24 Ağustos 2026, Mevlid Kandili → Enbiyâ 21:107 + salavat hadisi
+   - 10 Aralık 2026, Üç Ayların Başlangıcı / Regaib → Âl-i İmrân 3:133 + tövbe duası
+
+   **Sırada:** 2027 (Miraç, Berat, Ramazan, Kadir, bayramlar). Diyanet'in 2027 sayfası
+   şu an tabloyu döndürmüyor; tarihler oradan okunmadan yazılmayacak.
 
 ## Dua havuzu (yapıldı)
 

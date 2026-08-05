@@ -22,6 +22,12 @@
       "note": "sıradaki ayet bağlamı olmadan anlaşılmayan bir temsil (An-Nahl 16:76) -> Al-Baqara 2:255"
     },
     {
+      "date": "2026-08-24",
+      "ayah_global": 2590,
+      "hadith_id": "hadeethenc:5403",
+      "note": "Mevlid Kandili (Diyanet 2026 takvimi) — Enbiyâ 21:107 \"âlemlere rahmet\" + salavat hadisi"
+    },
+    {
       "date": "2026-08-25",
       "ayah_global": 293,
       "note": "sıradaki ayet bir öncekinin devamı, tek başına eksik (An-Nahl 16:82) -> Al-Baqara 2:286"
@@ -195,6 +201,12 @@
       "date": "2026-11-01",
       "ayah_global": 4961,
       "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (Al-Israa 17:22) -> Ar-Rahmaan 55:60"
+    },
+    {
+      "date": "2026-12-10",
+      "ayah_global": 426,
+      "dua_id": "dua-037",
+      "note": "Üç Ayların Başlangıcı / Regaib Kandili (Diyanet 2026 takvimi) — Âl-i İmrân 3:133 \"Rabbinizin bağışına koşun\" + tövbe/istiğfar duası"
     }
   ]
 }
