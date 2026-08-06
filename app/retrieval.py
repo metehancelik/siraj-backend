@@ -133,7 +133,11 @@ def _fts_metni(question: str) -> str:
     benzer, anlamca alakasız maddeler. Yani düzeltme vektör ayağına uygulandığında modele
     bilmediği bir kelimeyi biliyormuş gibi gösteriyor ve kapı yanlış içeriğe açılıyor;
     boş dönmek bundan iyidir. Romanizasyon yazımla ilgili bir düzeltmedir, dolayısıyla
-    yazıma bakan ayağa aittir."""
+    yazıma bakan ayağa aittir.
+
+    _detect_sources da ÖZGÜN metni okur: tabloya ileride düzeltilmiş hâli "ayet"/"hadis"
+    gibi bir sözcük içeren bir kayıt eklenirse, arama o kaynağa daralırken FTS'in aradığı
+    metin başka bir şey olurdu."""
     return _ROMANIZASYON_RE.sub(lambda m: _ROMANIZASYON[m.group(0).lower()], question)
 
 
