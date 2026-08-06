@@ -107,6 +107,36 @@ _SOURCE_INTENT: list[tuple[re.Pattern, tuple[str, ...]]] = [
 ]
 
 
+# Uygulamanın adı her yerde Latin harfleriyle "Siraj" yazılı; korpüs aynı kelimeyi klasik
+# Türkçe yazımıyla "sirâc" olarak yazıyor. f_unaccent 'â'yı 'a'ya katlar ama 'j'yi 'c'ye
+# katlayamaz, dolayısıyla kullanıcı uygulamanın ADINI aynen yazdığında hiçbir şey
+# eşleşmiyordu (ölçüm 2026-08-07): "siraj ne demek" -> best_dist 0.8268, fts_hit False,
+# alaka kapısı kapalı, cevap "kaynaklarda bulamadım". Aynı soru "sirac ne demek" yazıldığında
+# fts_hit True ve Ahzab 46 pasajı ilk üçte geliyor — yani boşluk korpüste değil, yazımda.
+#
+# Tablo bilerek TEK kayıtlık. Akla gelen diğer romanizasyonların (hajj, jannah, dhikr...)
+# başarısız olduğuna dair bir ölçüm yok ve İngilizce sorular zaten çeviriden geçiyor;
+# ölçülmemiş kayıt eklemek sınanmamış yüzey demek. Yeni kayıt ekleyen, yukarıdakinin aynısı
+# bir önce/sonra ölçümünü yapmalı.
+_ROMANIZASYON = {"siraj": "sirâc"}
+_ROMANIZASYON_RE = re.compile(
+    r"\b(" + "|".join(_ROMANIZASYON) + r")\b", re.IGNORECASE)
+
+
+def _fts_metni(question: str) -> str:
+    """Sorgunun tam-metin ayağında kullanılacak hâli: romanizasyon korpüsün yazımına çevrilir.
+
+    YALNIZCA FTS ayağına uygulanır; vektör ayağı ve modele giden metin özgün hâlinde kalır.
+    Gerekçe (ölçüm 2026-08-07): düzeltilmiş metin embed edildiğinde "Siraj ne anlama
+    geliyor?" sorusunun en yakın komşu mesafesi 0.7538'den 0.3763'e düşüyor ve 0.42'lik
+    alaka kapısını TEK BAŞINA açıyor — ama gelen komşular Mİ‘RAC ve SIRAT, yani yazımca
+    benzer, anlamca alakasız maddeler. Yani düzeltme vektör ayağına uygulandığında modele
+    bilmediği bir kelimeyi biliyormuş gibi gösteriyor ve kapı yanlış içeriğe açılıyor;
+    boş dönmek bundan iyidir. Romanizasyon yazımla ilgili bir düzeltmedir, dolayısıyla
+    yazıma bakan ayağa aittir."""
+    return _ROMANIZASYON_RE.sub(lambda m: _ROMANIZASYON[m.group(0).lower()], question)
+
+
 def _detect_sources(question: str) -> list[str] | None:
     """Soru açıkça bir kaynak türü istiyorsa o kaynakları döner, aksi halde None."""
     folded = question.lower().replace("ı", "i").replace("â", "a").replace("î", "i")
@@ -180,11 +210,13 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
             question = translated
             turkish_query = True
 
+    fts_question = _fts_metni(question)
+
     qvec = await embed_one(question, kind="query")
     pool = await get_pool()
 
     async with pool.acquire() as conn:
-        relevance = await conn.fetchrow(_RELEVANCE_SQL, _vector_literal(qvec), question)
+        relevance = await conn.fetchrow(_RELEVANCE_SQL, _vector_literal(qvec), fts_question)
 
     # Vektör araması "en yakın komşu" mantığıyla çalıştığı için külliyatla hiç ilgisi
     # olmayan bir soruda bile bir şeyler döner. Ne semantik olarak yakın (mesafe eşiğin
@@ -211,7 +243,7 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
         rows = await conn.fetch(
             _SQL,
             _vector_literal(qvec),
-            question,
+            fts_question,
             settings.candidate_k,
             RRF_K,
             settings.top_k,
