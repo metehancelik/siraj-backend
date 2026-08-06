@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from .config import settings
 from .db import get_pool
 from .embeddings import embed_one
+from .intent import is_app_name_question
 from .llm import complete
 
 log = logging.getLogger("siraj")
@@ -118,9 +119,22 @@ _SOURCE_INTENT: list[tuple[re.Pattern, tuple[str, ...]]] = [
 # başarısız olduğuna dair bir ölçüm yok ve İngilizce sorular zaten çeviriden geçiyor;
 # ölçülmemiş kayıt eklemek sınanmamış yüzey demek. Yeni kayıt ekleyen, yukarıdakinin aynısı
 # bir önce/sonra ölçümünü yapmalı.
+#
+# Ek de yakalanır ('siraj' + 'ın'/'ı'/'a'/'la'/'tan'...): Türkçe eklemeli bir dil ve
+# kullanıcı "Sirajın anlamı nedir?" yazıyor. Kelime sınırı (\b...\b) aramak bunların
+# hiçbirini görmüyordu, yalnızca kesme işaretli "Siraj'ın" yakalanıyordu. Ek olduğu gibi
+# korunur; Postgres'in Türkçe kök bulucusu "sirâcın", "sirâcı", "sirâca" biçimlerinin
+# hepsini doğru şekilde 'siraç' köküne indiriyor (ölçüldü).
 _ROMANIZASYON = {"siraj": "sirâc"}
+
 _ROMANIZASYON_RE = re.compile(
-    r"\b(" + "|".join(_ROMANIZASYON) + r")\b", re.IGNORECASE)
+    r"\b(" + "|".join(_ROMANIZASYON) + r")'?(\w*)", re.IGNORECASE)
+
+# Uygulamanın adı sorulduğunda korpüste aranan sorgu. Kullanıcının ifadesi yerine bunu
+# kullanıyoruz çünkü ölçüldüğünde (2026-08-07) tam-metin ayağı bu biçimde eşleşiyor
+# (`siraç & demek`, 7 chunk) ve Ahzâb 46 kaydını ilk üçe getiriyor; kullanıcının doğal
+# ifadeleri ise AND yüzünden sıfır eşleşmeyle dönüyordu.
+_AD_ARAMA_SORGUSU = "sirâc ne demek"
 
 
 def _fts_metni(question: str) -> str:
@@ -138,7 +152,8 @@ def _fts_metni(question: str) -> str:
     _detect_sources da ÖZGÜN metni okur: tabloya ileride düzeltilmiş hâli "ayet"/"hadis"
     gibi bir sözcük içeren bir kayıt eklenirse, arama o kaynağa daralırken FTS'in aradığı
     metin başka bir şey olurdu."""
-    return _ROMANIZASYON_RE.sub(lambda m: _ROMANIZASYON[m.group(0).lower()], question)
+    return _ROMANIZASYON_RE.sub(
+        lambda m: _ROMANIZASYON[m.group(1).lower()] + m.group(2), question)
 
 
 def _detect_sources(question: str) -> list[str] | None:
@@ -208,7 +223,15 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
 
     # Arama daima Türkçe yapılır (korpüsün dili); soru başka dildeyse önce çevrilir.
     turkish_query = lang == "tr"
-    if not turkish_query and settings.translate_queries:
+
+    # Uygulamanın adının anlamı soruluyorsa arama, ölçülmüş biçimde çalışan sorguyla
+    # yapılır (bkz. intent.is_app_name_question). Kullanıcının kendi cümlesi modele
+    # ayrıca gidiyor; burada değişen yalnızca korpüste ne aradığımız. Çeviri de atlanır:
+    # sorgu zaten Türkçe ve bilinen bir sorgu.
+    if is_app_name_question(question):
+        question = _AD_ARAMA_SORGUSU
+        turkish_query = True
+    elif not turkish_query and settings.translate_queries:
         translated = await _translate_to_turkish(question)
         if translated:
             question = translated
