@@ -95,6 +95,23 @@ _FRAME = {
 
 DEFAULT_LANG = "tr"
 
+# Uygulamanın adı sorulduğunda kaynak bloğuna eklenen tek satır.
+#
+# Gerekçe (ölçüm 2026-08-07): İngilizce sorulduğunda arama doğru pasajları getiriyordu ama
+# model "siraj" ile Türkçe kaynaklardaki "sirâc" yazımını AYNI kelime olarak bağlayamayıp
+# "kaynaklarda bulamadım" diyordu. Normal İngilizce sorularda bu olmuyor, çünkü model
+# fast<->oruç bağını zaten biliyor; Siraj<->sirâc bağını bilmiyor.
+#
+# Not YAZIM hakkındadır, kelimenin anlamı hakkında değil: anlamı yine yalnızca kaynaklardan
+# gelir. Buraya "sirâc kandil demektir" yazmak modelin ağzına kaynaksız bir iddia koymak
+# olurdu; sadece iki yazımın aynı kelime olduğunu söylüyoruz.
+_AD_YAZIM_NOTU = {
+    "tr": '(Not: uygulamanın adı olan "Siraj", kaynaklarda "sirâc" yazımıyla geçer — '
+          'aynı kelimedir. Anlamını yalnızca aşağıdaki kaynaklardan aktar.)',
+    "en": '(Note: the app\'s name "Siraj" is spelled "sirâc" in the Turkish sources — '
+          'it is the same word. Report its meaning only from the sources below.)',
+}
+
 
 def normalize_lang(lang: str | None) -> str:
     """Desteklenmeyen/eksik dil kodunda Türkçeye düşer ("en-US" -> "en")."""
@@ -128,9 +145,13 @@ def build_context(passages: list[Passage], lang: str = DEFAULT_LANG) -> str:
 
 
 def build_user_message(question: str, passages: list[Passage],
-                       lang: str = DEFAULT_LANG) -> str:
-    sources_label, question_label, empty = _FRAME[normalize_lang(lang)]
+                       lang: str = DEFAULT_LANG, ad_sorusu: bool = False) -> str:
+    code = normalize_lang(lang)
+    sources_label, question_label, empty = _FRAME[code]
     if not passages:
         return f"{sources_label}:\n{empty}\n\n{question_label}: {question}"
-    return (f"{sources_label}:\n{build_context(passages, lang)}\n\n"
+    govde = build_context(passages, code)
+    if ad_sorusu:
+        govde = f"{_AD_YAZIM_NOTU[code]}\n\n{govde}"
+    return (f"{sources_label}:\n{govde}\n\n"
             f"{question_label}: {question}")

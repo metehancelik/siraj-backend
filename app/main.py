@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from .config import settings
 from .daily import DailyUnavailable, build_daily
 from .db import close_pool, get_pool, migrate
-from .intent import is_chitchat
+from .intent import is_app_name_question, is_chitchat
 from .llm import stream_completion
 from .prompt import build_user_message, normalize_lang, source_label, system_prompt
 from .retrieval import retrieve
@@ -113,7 +113,8 @@ async def _chat_stream(messages: list[Message], lang: str) -> AsyncIterator[str]
     llm_messages = [{"role": "system", "content": system_prompt(lang, chitchat)}]
     for m in history[:-1]:
         llm_messages.append({"role": m.role, "content": m.content})
-    last_content = question if chitchat else build_user_message(question, passages, lang)
+    last_content = question if chitchat else build_user_message(
+        question, passages, lang, ad_sorusu=is_app_name_question(question))
     llm_messages.append({"role": "user", "content": last_content})
 
     answer_parts: list[str] = []
