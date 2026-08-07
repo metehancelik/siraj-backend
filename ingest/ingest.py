@@ -11,9 +11,11 @@ Embedding servisi (TEI) ve Postgres çalışıyor olmalı.
 """
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import asyncpg
@@ -22,7 +24,7 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import settings  # noqa: E402
 from app.embeddings import embed  # noqa: E402
-from ingest.chunkers import Chunk, chunk_record  # noqa: E402
+from ingest.chunkers import Chunk, birlesik_baslik, chunk_record  # noqa: E402
 
 SOURCES = ["meal", "tefsir", "hadis", "fetva", "dua", "ilmihal", "risale", "sorular", "dia"]
 # TEI istek başına en fazla 32 metin kabul eder (max_client_batch_size); 32'yi aşınca 413.
@@ -59,6 +61,34 @@ def iter_chunks(data_dir: Path, source: str, limit: int) -> list[tuple[str, Chun
         for ch in chunk_record(source, rec):
             if ch.content.strip():
                 out.append((source, ch))
+    return _tekille(source, out)
+
+
+def _tekille(source: str, chunks: list[tuple[str, Chunk]]) -> list[tuple[str, Chunk]]:
+    """Birebir aynı içeriği taşıyan kayıtları teke indirir; ilk kayıt kalır.
+
+    Gerekçe ve ölçüm için bkz. chunkers.birlesik_baslik. Kısaca: bir tefsir yorumu bir
+    ayet ARALIĞI için yazılıp aralıktaki her ayetin sayfasında yayımlandığı için aynı
+    metin korpüse defalarca giriyordu; aynı metnin vektörü de aynı olduğundan ikizler
+    top_k'yı tek başlarına doldurup cevabı üç kaynağa dayanıyormuş gibi gösteriyordu.
+
+    Kalan kaydın künyesi kapsanan ayetlerin tamamını gösterecek şekilde yeniden yazılır,
+    yoksa "Yâsîn 34" künyesi 35 ve 36'yı da anlatan bir yoruma işaret ediyor olurdu."""
+    ilk: dict[str, tuple[str, Chunk]] = {}
+    basliklar: dict[str, list[str]] = {}
+    for item in chunks:
+        anahtar = hashlib.md5(item[1].content.encode("utf-8")).hexdigest()
+        ilk.setdefault(anahtar, item)
+        if item[1].title:
+            basliklar.setdefault(anahtar, []).append(item[1].title)
+
+    out = []
+    for anahtar, (src, ch) in ilk.items():
+        yeni = birlesik_baslik(source, basliklar.get(anahtar, []))
+        out.append((src, replace(ch, title=yeni) if yeni else ch))
+    dusen = len(chunks) - len(out)
+    if dusen:
+        print(f"[{source}] {dusen} yinelenen chunk teke indirildi")
     return out
 
 

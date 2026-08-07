@@ -251,3 +251,66 @@ def _chunk_record(source: str, rec: dict) -> list[Chunk]:
     windows = _window(text)
     return [Chunk(ref_id, i, _numbered_title(title, i, len(windows)), url, w, meta)
             for i, w in enumerate(windows)]
+
+
+# ---------------------------------------------------------------------------
+# Aynı içeriği tekrar eden kayıtların birleştirilmesi
+#
+# Diyanet'in Kur'an Yolu tefsiri bir AYET ARALIĞI için tek bir yorum yazar ve o yorumu
+# aralıktaki her ayetin kendi sayfasında yayımlar. Crawler sayfa sayfa gezdiği için aynı
+# metin, aralıktaki ayet sayısı kadar ayrı kayda giriyor: ölçüldüğünde (2026-08-07)
+# tefsir'in 17.145 satırının 9.087'si böyle bir grubun içindeydi (1.904 grup, 7.183
+# fazladan satır).
+#
+# Bu bir depolama savurganlığından fazlası: birebir aynı metnin vektörü de birebir aynı
+# olduğu için, biri en yakın komşuysa ikizleri de öyle oluyor ve top_k'yı tek başlarına
+# doldurabiliyorlar. Ölçümde 12 sorunun 4'ünde ilk üçte tekrar vardı, üçünde üç kaynağın
+# üçü de aynı metindi — cevap üç kaynağa dayanıyormuş gibi görünüyordu.
+_TEFSIR_BASLIK = re.compile(
+    r"^(?P<sure>.+?Suresi)\s+(?P<ayet>\d+(?:\s*-\s*\d+)?)\.\s*Ayet Tefsiri(?P<son>.*)$")
+
+
+def _ayet_kumesi(baslik: str) -> tuple[str, set[int], str] | None:
+    """Tefsir başlığından (sûre, kapsanan ayetler, başlığın kuyruğu) çıkarır."""
+    m = _TEFSIR_BASLIK.match((baslik or "").strip())
+    if not m:
+        return None
+    uclar = [int(x) for x in re.split(r"\s*-\s*", m["ayet"])]
+    return m["sure"], set(range(uclar[0], uclar[-1] + 1)), m["son"]
+
+
+def _araligi_yaz(ayetler: set[int]) -> str:
+    """Ayet kümesini okunur biçimde yazar: {34,35,36} -> "34-36", {105,106,108} -> "105-106, 108".
+
+    Boşluklu kümeyi "105-108" diye yazmak, o tefsirin 107'yi de kapsadığını söylemek olurdu;
+    ölçümde 1.904 grubun 35'i boşlukluydu, yani bu hâl gerçekten oluyor."""
+    sirali = sorted(ayetler)
+    parcalar, bas, onceki = [], sirali[0], sirali[0]
+    for n in sirali[1:] + [None]:
+        if n == onceki + 1:
+            onceki = n
+            continue
+        parcalar.append(str(bas) if bas == onceki else f"{bas}-{onceki}")
+        bas = onceki = n
+    return ", ".join(parcalar)
+
+
+def birlesik_baslik(source: str, basliklar: list[str]) -> str | None:
+    """Aynı içeriği paylaşan kayıtların başlıklarını tek başlıkta toplar.
+
+    Yalnızca tefsir için anlamlı bir birleştirme yapılabiliyor; başka kaynaklarda ilk
+    başlık korunur. Başlık aramaya girmiyor (tsv yalnızca content'ten üretiliyor), yani
+    burada değişen tek şey kullanıcının gördüğü künye."""
+    if source != "tefsir" or len(basliklar) < 2:
+        return None
+    cozulen = [_ayet_kumesi(b) for b in basliklar]
+    if not all(cozulen):
+        return None
+    sureler = {c[0] for c in cozulen}
+    if len(sureler) != 1:
+        return None
+    ayetler: set[int] = set()
+    for _, kume, _son in cozulen:
+        ayetler |= kume
+    sure, _, son = cozulen[0]
+    return f"{sure} {_araligi_yaz(ayetler)}. Ayet Tefsiri{son}"
