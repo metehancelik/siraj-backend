@@ -12,6 +12,12 @@
       "note": "sıradaki ayet tek başına çıplak bir tehdit olarak okunuyor (An-Nahl 16:63) -> Al-Baqara 2:153"
     },
     {
+      "date": "2026-08-08",
+      "hadith_id": "hadeethenc:6336",
+      "dua_id": "dua-058",
+      "note": "rotasyonun verdiği hadis (hadeethenc:65849, Bilal'in nalını) kıssanın yarısı ve `narrator` alanı boş, kart ravisiz çiziliyordu -> mescide devam hadisi; duası (dua-040) ise Türkçesi Arapçasıyla uyuşmuyordu (tekbir üçe, hamd ikiye çıkmış) -> sığınma duası. Ayet rotasyonda bırakıldı."
+    },
+    {
       "date": "2026-08-16",
       "ayah_global": 193,
       "note": "sıradaki ayet dönemin muhataplarına dönük polemik (An-Nahl 16:73) -> Al-Baqara 2:186"
