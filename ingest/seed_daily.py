@@ -66,6 +66,11 @@ async def seed(mobile: Path, dry_run: bool) -> None:
                 async with conn.transaction():
                     # Paketten düşen bir kayıt veritabanında kalırsa rotasyon iki tarafta
                     # ayrışır; bu yüzden tohumlama tam değişimdir, ekleme değil.
+                    #
+                    # Bedeli: `daily_schedule` FK'leri ON DELETE SET NULL, yani bu DELETE
+                    # sabitlenmiş hadith_id/dua_id alanlarını sessizce boşaltır — hata da
+                    # vermez, çıktı da değişmez. Bu yüzden ARDINDAN `seed_schedule`
+                    # çalıştırılmalı; yoksa küratörlük yapılmış günler rotasyona düşer.
                     await conn.execute(f"DELETE FROM {table}")
                     await conn.executemany(
                         f"INSERT INTO {table} (id, ordinal, payload) VALUES ($1,$2,$3)",
