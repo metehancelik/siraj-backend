@@ -95,17 +95,17 @@ _FRAME = {
 
 DEFAULT_LANG = "tr"
 
-# Uygulamanın adı sorulduğunda kaynak bloğuna eklenen tek satır.
+# A single line prepended to the source block when the app's own name is asked about.
 #
-# Gerekçe (ölçüm 2026-08-07): İngilizce sorulduğunda arama doğru pasajları getiriyordu ama
-# model "siraj" ile Türkçe kaynaklardaki "sirâc" yazımını AYNI kelime olarak bağlayamayıp
-# "kaynaklarda bulamadım" diyordu. Normal İngilizce sorularda bu olmuyor, çünkü model
-# fast<->oruç bağını zaten biliyor; Siraj<->sirâc bağını bilmiyor.
+# Reason (measured 2026-08-07): asked in English, the search retrieved the right passages
+# but the model would not connect "siraj" to the "sirâc" spelling in the Turkish sources
+# and answered "not in my sources". Ordinary English questions do not hit this, because the
+# model already knows fast maps to oruç; nothing tells it that Siraj maps to sirâc.
 #
-# Not YAZIM hakkındadır, kelimenin anlamı hakkında değil: anlamı yine yalnızca kaynaklardan
-# gelir. Buraya "sirâc kandil demektir" yazmak modelin ağzına kaynaksız bir iddia koymak
-# olurdu; sadece iki yazımın aynı kelime olduğunu söylüyoruz.
-_AD_YAZIM_NOTU = {
+# The note is about SPELLING, not about what the word means: the meaning still comes only
+# from the sources. Writing "sirâc means lamp" here would put an uncited claim in the
+# model's mouth; all we state is that the two spellings are one word.
+_APP_NAME_SPELLING_NOTE = {
     "tr": '(Not: uygulamanın adı olan "Siraj", kaynaklarda "sirâc" yazımıyla geçer — '
           'aynı kelimedir. Anlamını yalnızca aşağıdaki kaynaklardan aktar.)',
     "en": '(Note: the app\'s name "Siraj" is spelled "sirâc" in the Turkish sources — '
@@ -145,13 +145,13 @@ def build_context(passages: list[Passage], lang: str = DEFAULT_LANG) -> str:
 
 
 def build_user_message(question: str, passages: list[Passage],
-                       lang: str = DEFAULT_LANG, ad_sorusu: bool = False) -> str:
+                       lang: str = DEFAULT_LANG, app_name_question: bool = False) -> str:
     code = normalize_lang(lang)
     sources_label, question_label, empty = _FRAME[code]
     if not passages:
         return f"{sources_label}:\n{empty}\n\n{question_label}: {question}"
-    govde = build_context(passages, code)
-    if ad_sorusu:
-        govde = f"{_AD_YAZIM_NOTU[code]}\n\n{govde}"
-    return (f"{sources_label}:\n{govde}\n\n"
+    body = build_context(passages, code)
+    if app_name_question:
+        body = f"{_APP_NAME_SPELLING_NOTE[code]}\n\n{body}"
+    return (f"{sources_label}:\n{body}\n\n"
             f"{question_label}: {question}")

@@ -254,63 +254,61 @@ def _chunk_record(source: str, rec: dict) -> list[Chunk]:
 
 
 # ---------------------------------------------------------------------------
-# Aynı içeriği tekrar eden kayıtların birleştirilmesi
+# Merging records that repeat the same text
 #
-# Diyanet'in Kur'an Yolu tefsiri bir AYET ARALIĞI için tek bir yorum yazar ve o yorumu
-# aralıktaki her ayetin kendi sayfasında yayımlar. Crawler sayfa sayfa gezdiği için aynı
-# metin, aralıktaki ayet sayısı kadar ayrı kayda giriyor: ölçüldüğünde (2026-08-07)
-# tefsir'in 17.145 satırının 9.087'si böyle bir grubun içindeydi (1.904 grup, 7.183
-# fazladan satır).
+# Diyanet's Kur'an Yolu writes one commentary for an ayet RANGE and publishes it on each
+# ayet's own page. The crawler walks pages, so the identical text enters the corpus once
+# per ayet: measured on 2026-08-07, 9,087 of tefsir's 17,145 rows sat in such a group
+# (1,904 groups, 7,183 redundant rows).
 #
-# Bu bir depolama savurganlığından fazlası: birebir aynı metnin vektörü de birebir aynı
-# olduğu için, biri en yakın komşuysa ikizleri de öyle oluyor ve top_k'yı tek başlarına
-# doldurabiliyorlar. Ölçümde 12 sorunun 4'ünde ilk üçte tekrar vardı, üçünde üç kaynağın
-# üçü de aynı metindi — cevap üç kaynağa dayanıyormuş gibi görünüyordu.
-_TEFSIR_BASLIK = re.compile(
-    r"^(?P<sure>.+?Suresi)\s+(?P<ayet>\d+(?:\s*-\s*\d+)?)\.\s*Ayet Tefsiri(?P<son>.*)$")
+# That is more than wasted storage. Identical text has an identical embedding, so if one
+# copy is the nearest neighbour its twins are equally near and can fill top_k by
+# themselves. Over 12 questions, 4 returned duplicate text in the top three and in three
+# of those all three sources were the same passage — the answer looked triply sourced.
+_TEFSIR_TITLE = re.compile(
+    r"^(?P<surah>.+?Suresi)\s+(?P<ayahs>\d+(?:\s*-\s*\d+)?)\.\s*Ayet Tefsiri(?P<tail>.*)$")
 
 
-def _ayet_kumesi(baslik: str) -> tuple[str, set[int], str] | None:
-    """Tefsir başlığından (sûre, kapsanan ayetler, başlığın kuyruğu) çıkarır."""
-    m = _TEFSIR_BASLIK.match((baslik or "").strip())
+def _parse_tefsir_title(title: str) -> tuple[str, set[int], str] | None:
+    """Split a tefsir title into (surah, ayahs it covers, trailing text)."""
+    m = _TEFSIR_TITLE.match((title or "").strip())
     if not m:
         return None
-    uclar = [int(x) for x in re.split(r"\s*-\s*", m["ayet"])]
-    return m["sure"], set(range(uclar[0], uclar[-1] + 1)), m["son"]
+    ends = [int(x) for x in re.split(r"\s*-\s*", m["ayahs"])]
+    return m["surah"], set(range(ends[0], ends[-1] + 1)), m["tail"]
 
 
-def _araligi_yaz(ayetler: set[int]) -> str:
-    """Ayet kümesini okunur biçimde yazar: {34,35,36} -> "34-36", {105,106,108} -> "105-106, 108".
+def _format_ayah_range(ayahs: set[int]) -> str:
+    """Render an ayah set readably: {34,35,36} -> "34-36", {105,106,108} -> "105-106, 108".
 
-    Boşluklu kümeyi "105-108" diye yazmak, o tefsirin 107'yi de kapsadığını söylemek olurdu;
-    ölçümde 1.904 grubun 35'i boşlukluydu, yani bu hâl gerçekten oluyor."""
-    sirali = sorted(ayetler)
-    parcalar, bas, onceki = [], sirali[0], sirali[0]
-    for n in sirali[1:] + [None]:
-        if n == onceki + 1:
-            onceki = n
+    Writing a gapped set as "105-108" would claim the commentary covers 107 as well; 35 of
+    the 1,904 measured groups are gapped, so this really happens."""
+    ordered = sorted(ayahs)
+    runs, start, previous = [], ordered[0], ordered[0]
+    for n in ordered[1:] + [None]:
+        if n == previous + 1:
+            previous = n
             continue
-        parcalar.append(str(bas) if bas == onceki else f"{bas}-{onceki}")
-        bas = onceki = n
-    return ", ".join(parcalar)
+        runs.append(str(start) if start == previous else f"{start}-{previous}")
+        start = previous = n
+    return ", ".join(runs)
 
 
-def birlesik_baslik(source: str, basliklar: list[str]) -> str | None:
-    """Aynı içeriği paylaşan kayıtların başlıklarını tek başlıkta toplar.
+def merged_title(source: str, titles: list[str]) -> str | None:
+    """Fold the titles of records sharing one text into a single title.
 
-    Yalnızca tefsir için anlamlı bir birleştirme yapılabiliyor; başka kaynaklarda ilk
-    başlık korunur. Başlık aramaya girmiyor (tsv yalnızca content'ten üretiliyor), yani
-    burada değişen tek şey kullanıcının gördüğü künye."""
-    if source != "tefsir" or len(basliklar) < 2:
+    Only tefsir affords a meaningful merge; other sources keep their first title. Titles
+    never reach search — tsv and the embedding are built from content alone — so the only
+    thing this changes is the citation the reader sees."""
+    if source != "tefsir" or len(titles) < 2:
         return None
-    cozulen = [_ayet_kumesi(b) for b in basliklar]
-    if not all(cozulen):
+    parsed = [_parse_tefsir_title(t) for t in titles]
+    if not all(parsed):
         return None
-    sureler = {c[0] for c in cozulen}
-    if len(sureler) != 1:
+    if len({p[0] for p in parsed}) != 1:
         return None
-    ayetler: set[int] = set()
-    for _, kume, _son in cozulen:
-        ayetler |= kume
-    sure, _, son = cozulen[0]
-    return f"{sure} {_araligi_yaz(ayetler)}. Ayet Tefsiri{son}"
+    ayahs: set[int] = set()
+    for _surah, covered, _tail in parsed:
+        ayahs |= covered
+    surah, _, tail = parsed[0]
+    return f"{surah} {_format_ayah_range(ayahs)}. Ayet Tefsiri{tail}"

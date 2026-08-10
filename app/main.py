@@ -114,7 +114,7 @@ async def _chat_stream(messages: list[Message], lang: str) -> AsyncIterator[str]
     for m in history[:-1]:
         llm_messages.append({"role": m.role, "content": m.content})
     last_content = question if chitchat else build_user_message(
-        question, passages, lang, ad_sorusu=is_app_name_question(question))
+        question, passages, lang, app_name_question=is_app_name_question(question))
     llm_messages.append({"role": "user", "content": last_content})
 
     answer_parts: list[str] = []

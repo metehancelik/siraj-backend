@@ -1,16 +1,18 @@
-"""Sohbet niyeti tespiti: selamlaşma/teşekkür/kısa sohbet mesajlarını yakalar.
+"""Chat-intent detection: catches greetings, thanks and other small talk.
 
-Vektör araması "en yakın komşu" mantığıyla çalıştığı için "merhaba" gibi dinî içerik
-taşımayan mesajlarda bile en yakın 3 pasajı getirir — alaka kontrolü yapmaz. Bu modül,
-mesaj TAMAMEN bilinen selamlaşma/teşekkür kalıplarından oluşuyorsa retrieval'ı devre dışı
-bırakmak için kullanılır. Kasıtlı olarak muhafazakâr: mesajın tamamı bilinen kalıplarla
-"kapanmıyorsa" (ör. "merhaba, oruç hakkında bir sorum var") normal RAG akışı çalışır —
-yanlışlıkla gerçek bir dinî soruyu sohbet sanıp reddetmek, tersinden çok daha kötüdür.
+Vector search works by nearest neighbour, so it returns the closest three passages even
+for a message like "merhaba" that carries no religious content — it never checks
+relevance. This module exists to switch retrieval off when a message consists ENTIRELY of
+known greeting/thanks/small-talk phrases. It is deliberately conservative: if the message
+does not "close" on known phrases (e.g. "merhaba, oruç hakkında bir sorum var") the normal
+RAG path runs, because mistaking a real religious question for small talk is far worse
+than the reverse.
 """
 import re
 import unicodedata
 
-# Uzunluktan bağımsız tam ifadeler; en uzun önce denenir ki alt dizeler yanlış eşleşmesin.
+# Whole phrases regardless of length; the longest is tried first so substrings cannot
+# match by accident.
 _FILLER_PHRASES = sorted([
     "selamun aleykum", "esselamu aleykum", "aleykum selam", "selamlar", "selam", "merhabalar",
     "merhaba", "mrb", "hey", "hi", "hello",
@@ -25,8 +27,8 @@ _FILLER_PHRASES = sorted([
     "kimsin", "sen kimsin", "adin ne", "ismin ne", "nesin sen", "sen nesin", "seni kim yapti",
     "tamam", "tamamdir", "peki", "anladim", "ok", "okey", "super", "harika", "guzel", "nice",
     "evet", "hayir", "olur", "olur mu",
-    # İngilizce arayüzde de aynı kalıplar geliyor; bunlar olmadan "thank you" gibi bir
-    # mesaj tam RAG akışını tetikleyip alakasız ayet gösteriyordu.
+    # The English interface receives the same openers; without these a message like
+    # "thank you" triggered the full RAG path and surfaced an unrelated verse.
     "assalamu alaikum", "asalamu alaikum", "salam alaikum", "walaikum salam", "salam",
     "good morning", "good afternoon", "good evening", "good night",
     "how are you", "how are you doing", "hows it going", "how is it going",
@@ -39,67 +41,69 @@ _FILLER_PHRASES = sorted([
 ], key=len, reverse=True)
 
 _WORD_RE = re.compile(r"[^a-z0-9 ]+")
-_KESME_RE = re.compile(r"['’ʼ`´]")
+_APOSTROPHE_RE = re.compile(r"['’ʼ`´]")
 
 
 def _fold(text: str) -> str:
-    """Türkçe karakterleri ve büyük/küçük harfi normalize eder, noktalamayı atar."""
+    """Normalise Turkish characters and case, and drop punctuation."""
     t = text.strip().lower()
     t = t.replace("ı", "i").replace("i̇", "i")
     t = unicodedata.normalize("NFD", t)
     t = "".join(c for c in t if unicodedata.category(c) != "Mn")
-    # Kesme işareti kelimeyi BÖLMEZ, düşer: "Siraj'ın" -> "sirajin", "how's" -> "hows".
-    # Boşluğa çevrildiğinde Türkçe ek ayrı bir kelimeye dönüşüyor ve ad tanınmıyordu;
-    # aynı sebeple listedeki "hows it going" da "how's it going" yazımını kaçırıyordu.
-    t = _KESME_RE.sub("", t)
+    # An apostrophe does NOT split a word, it disappears: "Siraj'ın" -> "sirajin",
+    # "how's" -> "hows". Turned into a space, a Turkish suffix became a word of its own
+    # and the name went unrecognised; for the same reason "hows it going" in the list
+    # above could never match the spelling "how's it going".
+    t = _APOSTROPHE_RE.sub("", t)
     t = _WORD_RE.sub(" ", t)
     return re.sub(r"\s+", " ", t).strip()
 
 
-# "Siraj ne demek?" — uygulamanın KENDİ ADININ anlamı sorulduğunda eşleşir.
-# `siraj\w*` eki de yakalar: Türkçe eklemeli bir dil, kullanıcı "Sirajın", "Sirajı",
-# "Siraja" yazıyor ve kelime sınırı aramak bunların hiçbirini görmüyordu.
-# İkinci grup soruyu "anlam sorusu" yapan kalıp; onsuz eşleşmez, böylece "Siraj namaz
-# vaktini nasıl hesaplıyor?" gibi uygulamaya dair başka sorular buraya düşmez.
-_ANLAM_KALIBI = (
+# Matches when the user asks what the app's OWN NAME means.
+# `siraj\w*` also catches the suffix: Turkish is agglutinative and people write "Sirajın",
+# "Sirajı", "Siraja", none of which a word boundary saw.
+_MEANING_PATTERN = (
     r"ne demek|ne demektir|nedir|ne anlama|anlami|anlamini|manasi|manasini|"
     r"kelimesi|isminin|adinin|ismi|adi|nereden geliyor|"
     r"mean|means|meaning|stand for"
 )
-# Adla kalıbın ARASINA yalnızca şu kelimeler girebilir. Serbest bir `\w+` denendi ve
-# "Siraj, hac nedir?" cümlesini de yakaladı — yani uygulamaya adıyla hitap edip BAŞKA bir
-# şey soran kullanıcıyı, adının anlamını sormuş sayıyordu. Kapalı liste bunu önlüyor.
-_ARA_KELIME = (r"isminin|ismi|adinin|adi|kelimesinin|kelimesi|sozcugunun|sozcugu|"
+# Only these words may sit BETWEEN the name and the pattern. A free `\w+` was tried and it
+# also matched "Siraj, hac nedir?" — a user addressing the app by name while asking about
+# something else entirely. The closed list prevents that.
+_INFIX_WORD = (r"isminin|ismi|adinin|adi|kelimesinin|kelimesi|sozcugunun|sozcugu|"
                r"lafzinin|lafzi|uygulamasinin|uygulamasi")
-_AD_ANLAMI_RE = re.compile(
+_APP_NAME_QUESTION_RE = re.compile(
     # "siraj(ın) ne demek", "siraj isminin anlamı"
-    r"\bsiraj\w*(?:\s+(?:" + _ARA_KELIME + r"))?\s+(?:" + _ANLAM_KALIBI + r")\b"
-    # ters sıra: "what is the meaning of siraj"
-    r"|\b(?:" + _ANLAM_KALIBI + r")(?:\s+(?:of|the|word|name|for))*\s+siraj\w*\b"
+    r"\bsiraj\w*(?:\s+(?:" + _INFIX_WORD + r"))?\s+(?:" + _MEANING_PATTERN + r")\b"
+    # reversed: "what is the meaning of siraj"
+    r"|\b(?:" + _MEANING_PATTERN + r")(?:\s+(?:of|the|word|name|for))*\s+siraj\w*\b"
 )
 
 
 def is_app_name_question(text: str) -> bool:
-    """Soru, uygulamanın adının ne anlama geldiğini mi soruyor?
+    """Is the question asking what the app's name means?
 
-    Neden ayrı bir yol (ölçüm 2026-08-07): korpüs kelimeyi "sirâc" yazıyor ve tam-metin
-    sorgusu terimleri AND'liyor. "sirâc ne demek" -> `siraç & demek`, 7 eşleşme; ama
-    "sirâcın anlamı nedir" -> `siraç & anlami & ne`, 0 eşleşme. Yani soruyu bozan şey
-    "ne" gibi sıradan bir kelime. Aynı sorunun üç yazımı üç farklı kapı sonucu veriyordu
-    ve açılan tek varyant `sirâc` ile ilgisiz bir vektör mesafesiyle açılıyordu — yani
-    ayarlanabilir bir şey değil, gürültü.
+    Why this needs its own path (measured 2026-08-07): the corpus spells the word "sirâc"
+    and the full-text query ANDs its terms. "sirâc ne demek" becomes `siraç & demek` and
+    matches 7 chunks, but "sirâcın anlamı nedir" becomes `siraç & anlami & ne` and matches
+    none — an ordinary word like "ne" is what breaks it. Three spellings of one question
+    gave three different gate outcomes, and the only one that opened did so on a vector
+    distance unrelated to sirâc. That is noise, not something to tune.
 
-    AND semantiğini gevşetmek yerine (ölçülüp reddedildi: 'bir' lexeme'i chunk'ların
-    %76'sında geçiyor) aramayı ölçülmüş biçimde çalışan sorguya yönlendiriyoruz.
-    Özel-durum yalnızca şu olgu: uygulamanın adı kaynaklarda "sirâc" yazılır. Bu ürüne
-    dair bir bilgi, dine dair bir iddia değil — cevap yine yalnızca korpüsten gelir."""
-    return bool(_AD_ANLAMI_RE.search(_fold(text)))
+    Rather than loosen the AND semantics (measured and rejected: the 'bir' lexeme appears
+    in 76% of chunks) the search is routed to the phrasing that is measured to work. The
+    only thing special-cased is that the app's name is spelled "sirâc" in the sources: a
+    fact about the product, not a claim about religion. The answer still comes solely from
+    the corpus.
+    """
+    return bool(_APP_NAME_QUESTION_RE.search(_fold(text)))
 
 
 def is_chitchat(text: str) -> bool:
-    """Mesajın TAMAMEN bilinen selamlaşma/teşekkür/kısa-sohbet kalıplarından oluşup
-    oluşmadığını döner. Kısmi eşleşme (ör. bir selamla başlayıp gerçek soru içeren mesaj)
-    False döner — muhafazakâr davranış kasıtlıdır."""
+    """Whether the message consists ENTIRELY of known greeting/thanks/small-talk phrases.
+
+    A partial match (e.g. an opener followed by a real question) returns False; the
+    conservative behaviour is deliberate."""
     remaining = _fold(text)
     if not remaining:
         return False

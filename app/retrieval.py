@@ -108,52 +108,52 @@ _SOURCE_INTENT: list[tuple[re.Pattern, tuple[str, ...]]] = [
 ]
 
 
-# Uygulamanın adı her yerde Latin harfleriyle "Siraj" yazılı; korpüs aynı kelimeyi klasik
-# Türkçe yazımıyla "sirâc" olarak yazıyor. f_unaccent 'â'yı 'a'ya katlar ama 'j'yi 'c'ye
-# katlayamaz, dolayısıyla kullanıcı uygulamanın ADINI aynen yazdığında hiçbir şey
-# eşleşmiyordu (ölçüm 2026-08-07): "siraj ne demek" -> best_dist 0.8268, fts_hit False,
-# alaka kapısı kapalı, cevap "kaynaklarda bulamadım". Aynı soru "sirac ne demek" yazıldığında
-# fts_hit True ve Ahzab 46 pasajı ilk üçte geliyor — yani boşluk korpüste değil, yazımda.
+# The app writes its own name in Latin letters everywhere as "Siraj"; the corpus writes
+# the same word in classical Turkish spelling as "sirâc". f_unaccent folds 'â' to 'a' but
+# cannot fold 'j' to 'c', so when a user typed the app's NAME verbatim nothing matched
+# (measured 2026-08-07): "siraj ne demek" -> best_dist 0.8268, fts_hit False, relevance
+# gate shut, answer "not in my sources". Spelled "sirac ne demek" the same question gives
+# fts_hit True and puts the Ahzâb 46 passage in the top three — so the gap is in the
+# spelling, not in the corpus.
 #
-# Tablo bilerek TEK kayıtlık. Akla gelen diğer romanizasyonların (hajj, jannah, dhikr...)
-# başarısız olduğuna dair bir ölçüm yok ve İngilizce sorular zaten çeviriden geçiyor;
-# ölçülmemiş kayıt eklemek sınanmamış yüzey demek. Yeni kayıt ekleyen, yukarıdakinin aynısı
-# bir önce/sonra ölçümünü yapmalı.
+# The table holds ONE entry on purpose. No measurement says the other romanizations that
+# come to mind (hajj, jannah, dhikr...) fail, and English questions already pass through
+# the translator; adding unmeasured entries would be adding untested surface. Whoever adds
+# one owes the same before/after measurement as above.
 #
-# Ek de yakalanır ('siraj' + 'ın'/'ı'/'a'/'la'/'tan'...): Türkçe eklemeli bir dil ve
-# kullanıcı "Sirajın anlamı nedir?" yazıyor. Kelime sınırı (\b...\b) aramak bunların
-# hiçbirini görmüyordu, yalnızca kesme işaretli "Siraj'ın" yakalanıyordu. Ek olduğu gibi
-# korunur; Postgres'in Türkçe kök bulucusu "sirâcın", "sirâcı", "sirâca" biçimlerinin
-# hepsini doğru şekilde 'siraç' köküne indiriyor (ölçüldü).
-_ROMANIZASYON = {"siraj": "sirâc"}
+# Suffixes are caught too ('siraj' + 'ın'/'ı'/'a'/'la'/'tan'...): Turkish is agglutinative
+# and people write "Sirajın anlamı nedir?". A word boundary (\b...\b) saw none of those,
+# only the apostrophe form "Siraj'ın". The suffix is preserved as typed; Postgres's Turkish
+# stemmer reduces "sirâcın", "sirâcı" and "sirâca" to the 'siraç' stem (measured).
+_ROMANIZATION = {"siraj": "sirâc"}
 
-_ROMANIZASYON_RE = re.compile(
-    r"\b(" + "|".join(_ROMANIZASYON) + r")'?(\w*)", re.IGNORECASE)
+_ROMANIZATION_RE = re.compile(
+    r"\b(" + "|".join(_ROMANIZATION) + r")'?(\w*)", re.IGNORECASE)
 
-# Uygulamanın adı sorulduğunda korpüste aranan sorgu. Kullanıcının ifadesi yerine bunu
-# kullanıyoruz çünkü ölçüldüğünde (2026-08-07) tam-metin ayağı bu biçimde eşleşiyor
-# (`siraç & demek`, 7 chunk) ve Ahzâb 46 kaydını ilk üçe getiriyor; kullanıcının doğal
-# ifadeleri ise AND yüzünden sıfır eşleşmeyle dönüyordu.
-_AD_ARAMA_SORGUSU = "sirâc ne demek"
+# The query used against the corpus when the app's name is asked about. We use this rather
+# than the user's own phrasing because, measured on 2026-08-07, the full-text leg matches
+# in this shape (`siraç & demek`, 7 chunks) and brings the Ahzâb 46 record into the top
+# three, while the user's natural phrasings returned zero matches because of the AND.
+_APP_NAME_SEARCH_QUERY = "sirâc ne demek"
 
 
-def _fts_metni(question: str) -> str:
-    """Sorgunun tam-metin ayağında kullanılacak hâli: romanizasyon korpüsün yazımına çevrilir.
+def _fts_text(question: str) -> str:
+    """The form of the query used by the full-text leg: romanization mapped to the corpus.
 
-    YALNIZCA FTS ayağına uygulanır; vektör ayağı ve modele giden metin özgün hâlinde kalır.
-    Gerekçe (ölçüm 2026-08-07): düzeltilmiş metin embed edildiğinde "Siraj ne anlama
-    geliyor?" sorusunun en yakın komşu mesafesi 0.7538'den 0.3763'e düşüyor ve 0.42'lik
-    alaka kapısını TEK BAŞINA açıyor — ama gelen komşular Mİ‘RAC ve SIRAT, yani yazımca
-    benzer, anlamca alakasız maddeler. Yani düzeltme vektör ayağına uygulandığında modele
-    bilmediği bir kelimeyi biliyormuş gibi gösteriyor ve kapı yanlış içeriğe açılıyor;
-    boş dönmek bundan iyidir. Romanizasyon yazımla ilgili bir düzeltmedir, dolayısıyla
-    yazıma bakan ayağa aittir.
+    Applied to the FULL-TEXT LEG ONLY; the vector leg and the text sent to the model keep
+    the original. Reason (measured 2026-08-07): embedding the corrected text drops the
+    nearest-neighbour distance for "Siraj ne anlama geliyor?" from 0.7538 to 0.3763, which
+    opens the 0.42 relevance gate on its own — but the neighbours that arrive are Mİ‘RAC
+    and SIRAT, entries near in spelling and unrelated in meaning. Applied to the vector
+    leg, the correction shows the model a word it does not know as though it did, and the
+    gate opens onto the wrong content; returning nothing is better than that. Romanization
+    is a spelling correction, so it belongs to the leg that reads spelling.
 
-    _detect_sources da ÖZGÜN metni okur: tabloya ileride düzeltilmiş hâli "ayet"/"hadis"
-    gibi bir sözcük içeren bir kayıt eklenirse, arama o kaynağa daralırken FTS'in aradığı
-    metin başka bir şey olurdu."""
-    return _ROMANIZASYON_RE.sub(
-        lambda m: _ROMANIZASYON[m.group(1).lower()] + m.group(2), question)
+    _detect_sources reads the ORIGINAL text as well: were an entry whose corrected form
+    contains a word like "ayet"/"hadis" ever added to the table, the search would narrow to
+    that source while the full-text leg searched for something else."""
+    return _ROMANIZATION_RE.sub(
+        lambda m: _ROMANIZATION[m.group(1).lower()] + m.group(2), question)
 
 
 def _detect_sources(question: str) -> list[str] | None:
@@ -224,12 +224,12 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
     # Arama daima Türkçe yapılır (korpüsün dili); soru başka dildeyse önce çevrilir.
     turkish_query = lang == "tr"
 
-    # Uygulamanın adının anlamı soruluyorsa arama, ölçülmüş biçimde çalışan sorguyla
-    # yapılır (bkz. intent.is_app_name_question). Kullanıcının kendi cümlesi modele
-    # ayrıca gidiyor; burada değişen yalnızca korpüste ne aradığımız. Çeviri de atlanır:
-    # sorgu zaten Türkçe ve bilinen bir sorgu.
+    # When the meaning of the app's name is asked, the search runs with the query that is
+    # measured to work (see intent.is_app_name_question). The user's own sentence still
+    # reaches the model separately; what changes here is only what we look for in the
+    # corpus. Translation is skipped too: the query is already Turkish and already known.
     if is_app_name_question(question):
-        question = _AD_ARAMA_SORGUSU
+        question = _APP_NAME_SEARCH_QUERY
         turkish_query = True
     elif not turkish_query and settings.translate_queries:
         translated = await _translate_to_turkish(question)
@@ -237,7 +237,7 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
             question = translated
             turkish_query = True
 
-    fts_question = _fts_metni(question)
+    fts_question = _fts_text(question)
 
     qvec = await embed_one(question, kind="query")
     pool = await get_pool()

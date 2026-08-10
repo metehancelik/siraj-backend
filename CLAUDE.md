@@ -1,5 +1,21 @@
 # CLAUDE.md
 
+## Kod dili: İngilizce
+
+Bu uygulamada **fonksiyon adları kesinlikle İngilizce** olacak. **Yorum satırları
+ve docstring'ler de İngilizce** olacak. İstisna yok.
+
+Kapsam kodun kendisidir; değişken, fonksiyon, sınıf ve modül adları ile kod
+içindeki tüm açıklamalar. Bunlar kapsam dışıdır:
+
+- Kullanıcıya görünen metinler (mağaza notları, arayüz çevirileri, `tr.json`).
+- Bu dosya, `CHANGELOG.md` gibi Türkçe tutulan proje belgeleri.
+- Korpüsten gelen veriler ve dinî terimlerin kendisi (`sirâc`, `tefsir`, `meal`
+  gibi adlar bir kavramın karşılığıysa olduğu gibi kalır).
+
+Not: depoda bu kuraldan önce yazılmış, yorumları Türkçe olan dosyalar var.
+Dokunulan yer İngilizceye çevrilir; toplu dönüşüm ayrı bir iştir.
+
 ## Ingest: her zaman yerel makinede, sunucuda değil
 
 "Ingest yap" dendiğinde **varsayılan ve tek yöntem** şudur: embedding'ler
