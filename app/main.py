@@ -1,4 +1,4 @@
-"""Siraj RAG backend — mobil sohbet için SSE akışlı /v1/chat.
+"""Siraj RAG backend - mobil sohbet için SSE akışlı /v1/chat.
 
 Mobil protokolü (text/event-stream), her satır `data: {json}`:
   {"type":"sources", "sources":[{n,source,label,title,url}]}   (bir kez, üretimden önce)
@@ -157,7 +157,7 @@ async def daily(date: str, lang: str = "tr", authorization: str | None = Header(
     Türkçe metin göstermek seçenek değil.
 
     Derlenemezse 503: uygulama bunu sessizce kendi yerel yoluna düşmek için okur, yani
-    kullanıcıya hata gösterilmez. 404 kullanılmaz — kayıtlı gün yoksa rotasyon devreye
+    kullanıcıya hata gösterilmez. 404 kullanılmaz - kayıtlı gün yoksa rotasyon devreye
     girer, "gün yok" diye bir durum yoktur.
     """
     _check_auth(authorization)

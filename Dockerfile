@@ -1,4 +1,4 @@
-# Siraj RAG backend — bağımsız imaj (yalnızca kod; veri gömülü DEĞİL).
+# Siraj RAG backend - bağımsız imaj (yalnızca kod; veri gömülü DEĞİL).
 # Derleme bağlamı BU dizin (backend/):
 #   cd backend && docker build -t <kullanici>/siraj-backend:latest .
 #

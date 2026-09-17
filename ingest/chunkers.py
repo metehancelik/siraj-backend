@@ -157,7 +157,7 @@ def _numbered_title(title: str | None, index: int, total: int) -> str | None:
     kaynak listesinde birbirinden ayırt edilemez görünür. Tek pencerede dokunma."""
     if not title or total <= 1:
         return title
-    return f"{title} — {index + 1}. bölüm"
+    return f"{title} - {index + 1}. bölüm"
 
 
 # Dışa aktarımdan sızan NULL göstergeleri ve "içerik yok" kalıpları. Bunlar
@@ -165,7 +165,7 @@ def _numbered_title(title: str | None, index: int, total: int) -> str | None:
 # yakın çıkıyor (ölçüldü: '\N' alakasız sorulara 0.0967 uzaklıkta, gerçek bir
 # ayet 0.60+). Böyle bir parça alaka kapısını (retrieval_max_distance) geçince
 # "bu soru külliyatla ilgisiz" güvencesi sessizce devre dışı kalıyor.
-_PLACEHOLDER = {"\\n", "\\N", "-", "—", "…", "..."}
+_PLACEHOLDER = {"\\n", "\\N", "-", "\u2014", "…", "..."}
 # dia'da madde başlığı var ama gövdesi yok olan bölümler ("AT: İslâm Öncesi.").
 # Kısa ayetler sağlıklı davrandığı için bu sınır yalnızca dia'ya uygulanır.
 _MIN_DIA_BODY = 30
@@ -264,7 +264,7 @@ def _chunk_record(source: str, rec: dict) -> list[Chunk]:
 # That is more than wasted storage. Identical text has an identical embedding, so if one
 # copy is the nearest neighbour its twins are equally near and can fill top_k by
 # themselves. Over 12 questions, 4 returned duplicate text in the top three and in three
-# of those all three sources were the same passage — the answer looked triply sourced.
+# of those all three sources were the same passage - the answer looked triply sourced.
 _TEFSIR_TITLE = re.compile(
     r"^(?P<surah>.+?Suresi)\s+(?P<ayahs>\d+(?:\s*-\s*\d+)?)\.\s*Ayet Tefsiri(?P<tail>.*)$")
 
@@ -298,7 +298,7 @@ def merged_title(source: str, titles: list[str]) -> str | None:
     """Fold the titles of records sharing one text into a single title.
 
     Only tefsir affords a meaningful merge; other sources keep their first title. Titles
-    never reach search — tsv and the embedding are built from content alone — so the only
+    never reach search - tsv and the embedding are built from content alone - so the only
     thing this changes is the citation the reader sees."""
     if source != "tefsir" or len(titles) < 2:
         return None

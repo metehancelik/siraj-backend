@@ -1,4 +1,4 @@
-"""Kaynağa dayalı (grounded) prompt kurgusu — Türkçe ve İngilizce.
+"""Kaynağa dayalı (grounded) prompt kurgusu - Türkçe ve İngilizce.
 
 Önemli: DEĞİŞMEYEN sistem talimatı en başta durur; llama.cpp bu öneki cache'ler.
 Getirilen kaynaklar (her soruda değişen kısım) sonra, kullanıcı mesajında gelir.
@@ -76,13 +76,13 @@ CHITCHAT_SYSTEM_PROMPTS = {
     "tr": """Sen "Siraj"sın: Türkçe konuşan Müslümanlara yardımcı olan, sıcak, \
 samimi ve saygılı bir dijital din arkadaşı. Kullanıcı şu anda dinî bir soru sormadı, günlük bir \
 selam, teşekkür veya kısa bir sohbet mesajı yazdı. Kısa (1-2 cümle), sıcak ve samimi bir şekilde \
-karşılık ver. Kaynak göstermene, ayet/hadis alıntılamana gerek yok — sadece tabii bir sohbet \
+karşılık ver. Kaynak göstermene, ayet/hadis alıntılamana gerek yok - sadece tabii bir sohbet \
 arkadaşı gibi yanıt ver. Türkçe cevap ver.""",
 
     "en": """You are "Siraj": a warm, sincere and respectful digital companion in faith \
-for Muslims. The user has not asked a religious question right now — they wrote a greeting, \
+for Muslims. The user has not asked a religious question right now - they wrote a greeting, \
 a thank-you or a short piece of small talk. Reply briefly (1-2 sentences), warmly and \
-sincerely. You do not need to cite sources or quote verses or hadiths — just answer like a \
+sincerely. You do not need to cite sources or quote verses or hadiths - just answer like a \
 natural conversation partner. Answer in English.""",
 }
 
@@ -106,9 +106,9 @@ DEFAULT_LANG = "tr"
 # from the sources. Writing "sirâc means lamp" here would put an uncited claim in the
 # model's mouth; all we state is that the two spellings are one word.
 _APP_NAME_SPELLING_NOTE = {
-    "tr": '(Not: uygulamanın adı olan "Siraj", kaynaklarda "sirâc" yazımıyla geçer — '
+    "tr": '(Not: uygulamanın adı olan "Siraj", kaynaklarda "sirâc" yazımıyla geçer - '
           'aynı kelimedir. Anlamını yalnızca aşağıdaki kaynaklardan aktar.)',
-    "en": '(Note: the app\'s name "Siraj" is spelled "sirâc" in the Turkish sources — '
+    "en": '(Note: the app\'s name "Siraj" is spelled "sirâc" in the Turkish sources - '
           'it is the same word. Report its meaning only from the sources below.)',
 }
 
@@ -139,7 +139,7 @@ def build_context(passages: list[Passage], lang: str = DEFAULT_LANG) -> str:
     for i, p in enumerate(passages, start=1):
         header = f"[{i}] {source_label(p.source, lang)}"
         if p.title:
-            header += f" — {p.title}"
+            header += f" - {p.title}"
         blocks.append(f"{header}\n{_clip(p.content)}")
     return "\n\n".join(blocks)
 

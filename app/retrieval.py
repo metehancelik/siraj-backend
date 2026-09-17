@@ -45,7 +45,7 @@ def _vector_literal(vec: list[float]) -> str:
 # chunk'ların %76'sında geçtiği için OR sorgusu 200 binden fazla belge eşleştiriyor,
 # ts_rank_cd de uzun belgeleri ödüllendirdiğinden aynı birkaç dev fetva neredeyse HER
 # soruda ilk 3'e giriyordu. AND isabetli; hiç eşleşmezse FTS ayağı boş kalır ve
-# sıralamayı yalnızca vektör belirler — bu, gürültüden iyidir.
+# sıralamayı yalnızca vektör belirler - bu, gürültüden iyidir.
 _SQL = """
 WITH q AS (
     SELECT $1::vector AS emb,
@@ -97,7 +97,7 @@ SELECT
 # Kullanıcı ne tür bir kaynak istediğini söylediğinde aramayı oraya daraltırız.
 # Gerekçe (ölçüm, 2026-07-31): "Sabır hakkında bir ayet" sorusunda en yakın 6 komşunun
 # hepsi DİA maddesiydi; en iyi ayet 0.3055 ile top_k'ya hiç giremiyordu. Bu bir sıralama
-# hatası değil — bir kavramı anlatan ansiklopedi maddesi, o kavramdan bahseden TEK bir
+# hatası değil - bir kavramı anlatan ansiklopedi maddesi, o kavramdan bahseden TEK bir
 # ayetten kosinüs olarak gerçekten daha yakın (chunk'tan şablon öneki çıkarmak durumu
 # kötüleştiriyor: 0.3743 -> 0.4407). Kullanıcı "ayet" dediyse niyeti açıktır, kullanırız.
 _SOURCE_INTENT: list[tuple[re.Pattern, tuple[str, ...]]] = [
@@ -113,7 +113,7 @@ _SOURCE_INTENT: list[tuple[re.Pattern, tuple[str, ...]]] = [
 # cannot fold 'j' to 'c', so when a user typed the app's NAME verbatim nothing matched
 # (measured 2026-08-07): "siraj ne demek" -> best_dist 0.8268, fts_hit False, relevance
 # gate shut, answer "not in my sources". Spelled "sirac ne demek" the same question gives
-# fts_hit True and puts the Ahzâb 46 passage in the top three — so the gap is in the
+# fts_hit True and puts the Ahzâb 46 passage in the top three - so the gap is in the
 # spelling, not in the corpus.
 #
 # The table holds ONE entry on purpose. No measurement says the other romanizations that
@@ -143,7 +143,7 @@ def _fts_text(question: str) -> str:
     Applied to the FULL-TEXT LEG ONLY; the vector leg and the text sent to the model keep
     the original. Reason (measured 2026-08-07): embedding the corrected text drops the
     nearest-neighbour distance for "Siraj ne anlama geliyor?" from 0.7538 to 0.3763, which
-    opens the 0.42 relevance gate on its own — but the neighbours that arrive are Mİ‘RAC
+    opens the 0.42 relevance gate on its own - but the neighbours that arrive are Mİ‘RAC
     and SIRAT, entries near in spelling and unrelated in meaning. Applied to the vector
     leg, the correction shows the model a word it does not know as though it did, and the
     gate opens onto the wrong content; returning nothing is better than that. Romanization
@@ -177,10 +177,10 @@ def _detect_sources(question: str) -> list[str] | None:
 _TRANSLATE_SYSTEM = (
     "You translate a user's question into Turkish so it can be used as a search query "
     "over a Turkish corpus of Islamic sources. Output ONLY the Turkish translation, "
-    "nothing else — no quotes, no explanation.\n"
+    "nothing else - no quotes, no explanation.\n"
     "Write it the way the question would be titled on a Turkish Islamic Q&A site: a "
     "complete, natural question ending in a question mark.\n"
-    "Use the specific verb the act takes rather than a generic frame — 'kurban kesmenin "
+    "Use the specific verb the act takes rather than a generic frame - 'kurban kesmenin "
     "hükmü nedir?' not 'kurban hakkında hüküm nedir?', 'evlenmenin şartları nelerdir?' "
     "not 'evlilik şartları nelerdir'.\n"
     "Keep religious terms in the classical Turkish form the sources use: ablution -> "

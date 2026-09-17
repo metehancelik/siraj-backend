@@ -10,7 +10,7 @@ gitignore'da: küratörlük tam tersine depoda durmalı.
 Küratörlük neden bir dosyada: `daily_schedule` satırları üretim verisidir, kodda görünmez.
 Doğrudan INSERT yazmak yerine depoya işlenmiş bir dosyadan uygulamak, seçimin aylar sonra
 diff'te okunabilmesini ve veritabanı yeniden kurulduğunda tek komutla geri gelmesini
-sağlıyor. Alanı boş bırakılan tür (hadis, dua) o gün rotasyonda kalır — bu dosya yalnızca
+sağlıyor. Alanı boş bırakılan tür (hadis, dua) o gün rotasyonda kalır - bu dosya yalnızca
 müdahaleyi taşır, günün tamamını değil.
 
 Ingest gibi, YEREL makineden SSH tüneli üzerinden çalıştırılır (bkz. CLAUDE.md).
@@ -54,7 +54,7 @@ def load(path: Path) -> list[dict]:
 
 async def seed(path: Path, dry_run: bool) -> None:
     rows = load(path)
-    print(f"{len(rows)} gün, {rows[0]['date']} — {rows[-1]['date']}")
+    print(f"{len(rows)} gün, {rows[0]['date']} - {rows[-1]['date']}")
     for row in rows[:3]:
         print(f"  {row['date']}: {row.get('note', '')}")
     if len(rows) > 3:

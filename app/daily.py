@@ -1,4 +1,4 @@
-"""Günün ayeti, hadisi ve duası — hangisi olduğunu seçer, içeriği derler.
+"""Günün ayeti, hadisi ve duası - hangisi olduğunu seçer, içeriği derler.
 
 Sözleşme ve gerekçeler: DAILY.md. Özet: seçim burada merkezîleşir, uygulama yine de
 paketindeki korpüsle çevrimdışı çalışabilir; iki taraf aynı gün aynı kaydı seçsin diye
@@ -21,7 +21,7 @@ TOTAL_AYAHS = 6236
 # International: Asad ayetleri bir öncekinin devamı sayıp küçük harfle başlıyor ve arkaik
 # kuruyordu, tek başına duran bir kart için yanlış. tr.vakfi (Diyanet Vakfı
 # meali) bilerek korunuyor: uç noktanın döndürdüğü ayet, cihazın bugün doğrudan aldığının
-# birebir aynısı olmalı — değişen tek şey isteği kimin yaptığı.
+# birebir aynısı olmalı - değişen tek şey isteği kimin yaptığı.
 _EDITIONS = "quran-uthmani,en.sahih,tr.vakfi"
 _ARABIC_EDITION = "quran-uthmani"
 _ENGLISH_EDITION = "en.sahih"
@@ -32,7 +32,7 @@ _EPOCH = dt.date(1970, 1, 1)
 
 class DailyUnavailable(RuntimeError):
     """Kart derlenemedi. Uygulama sessizce kendi yerel yoluna düşer, kullanıcıya hata
-    gösterilmez — gösterilecek içerik zaten vardır."""
+    gösterilmez - gösterilecek içerik zaten vardır."""
 
 
 def days_since_epoch(day: dt.date) -> int:
@@ -124,7 +124,7 @@ async def _rotating(
 
     `english_field` verildiğinde havuz yalnızca o alanı dolu olan kayıtlara daralır ve
     sıra bu daraltılmış küme üzerinde yürür. Havuz `MIN_POOL`'un altındaysa kart yok
-    sayılır (None) — çağıran onu cevaptan düşürür.
+    sayılır (None) - çağıran onu cevaptan düşürür.
     """
     if english_field:
         rows = await conn.fetch(
@@ -139,7 +139,7 @@ async def _rotating(
 
     total = await conn.fetchval(f"SELECT count(*) FROM {table}")
     if not total:
-        raise DailyUnavailable(f"{table} boş — tohumlama yapılmamış (bkz. DAILY.md)")
+        raise DailyUnavailable(f"{table} boş - tohumlama yapılmamış (bkz. DAILY.md)")
     payload = await conn.fetchval(
         f"SELECT payload FROM {table} WHERE ordinal = $1", day % total
     )
@@ -156,7 +156,7 @@ async def build_daily(day: dt.date, lang: str = "tr") -> dict:
     """Verilen YEREL takvim günü için üç kartı derler.
 
     Önce `daily_schedule`'a bakılır; satır yoksa (ya da bir alanı boşsa) deterministik
-    rotasyona düşülür — uygulamanın çevrimdışıyken yaptığının aynısı. Bu yüzden her günü
+    rotasyona düşülür - uygulamanın çevrimdışıyken yaptığının aynısı. Bu yüzden her günü
     elle doldurmak gerekmez.
     """
     index = days_since_epoch(day)

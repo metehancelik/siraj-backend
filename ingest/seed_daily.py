@@ -4,12 +4,12 @@ Kullanım:
     python -m ingest.seed_daily --mobile ../siraj-mobile
     python -m ingest.seed_daily --mobile ../siraj-mobile --dry-run
 
-Neden buradan: kart korpüsü `chunks` üzerinden karşılanamaz — orası pencerelenmiş arama
+Neden buradan: kart korpüsü `chunks` üzerinden karşılanamaz - orası pencerelenmiş arama
 metni; kartın istediği kısa söz + ravi + derece yalnızca uygulamanın paketinde var
 (`src/data/hadiths.json`, `src/data/duas.json`). Ayrıntı: DAILY.md.
 
 `ordinal` dosyadaki sıradır. Rotasyon (`gün % korpüs_boyu`) iki tarafta da bu sıraya
-baktığı için uzak yol ile çevrimdışı yol aynı günde aynı kaydı seçer — tohumlamanın
+baktığı için uzak yol ile çevrimdışı yol aynı günde aynı kaydı seçer - tohumlamanın
 doğruluk ölçütü budur, `--dry-run` bunu karşılaştırmadan önce gösterir.
 
 Ingest gibi, YEREL makineden SSH tüneli üzerinden çalıştırılır (bkz. CLAUDE.md).
@@ -68,7 +68,7 @@ async def seed(mobile: Path, dry_run: bool) -> None:
                     # ayrışır; bu yüzden tohumlama tam değişimdir, ekleme değil.
                     #
                     # Bedeli: `daily_schedule` FK'leri ON DELETE SET NULL, yani bu DELETE
-                    # sabitlenmiş hadith_id/dua_id alanlarını sessizce boşaltır — hata da
+                    # sabitlenmiş hadith_id/dua_id alanlarını sessizce boşaltır - hata da
                     # vermez, çıktı da değişmez. Bu yüzden ARDINDAN `seed_schedule`
                     # çalıştırılmalı; yoksa küratörlük yapılmış günler rotasyona düşer.
                     await conn.execute(f"DELETE FROM {table}")

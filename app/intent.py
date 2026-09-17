@@ -1,7 +1,7 @@
 """Chat-intent detection: catches greetings, thanks and other small talk.
 
 Vector search works by nearest neighbour, so it returns the closest three passages even
-for a message like "merhaba" that carries no religious content — it never checks
+for a message like "merhaba" that carries no religious content - it never checks
 relevance. This module exists to switch retrieval off when a message consists ENTIRELY of
 known greeting/thanks/small-talk phrases. It is deliberately conservative: if the message
 does not "close" on known phrases (e.g. "merhaba, oruç hakkında bir sorum var") the normal
@@ -68,7 +68,7 @@ _MEANING_PATTERN = (
     r"mean|means|meaning|stand for"
 )
 # Only these words may sit BETWEEN the name and the pattern. A free `\w+` was tried and it
-# also matched "Siraj, hac nedir?" — a user addressing the app by name while asking about
+# also matched "Siraj, hac nedir?" - a user addressing the app by name while asking about
 # something else entirely. The closed list prevents that.
 _INFIX_WORD = (r"isminin|ismi|adinin|adi|kelimesinin|kelimesi|sozcugunun|sozcugu|"
                r"lafzinin|lafzi|uygulamasinin|uygulamasi")
@@ -86,7 +86,7 @@ def is_app_name_question(text: str) -> bool:
     Why this needs its own path (measured 2026-08-07): the corpus spells the word "sirâc"
     and the full-text query ANDs its terms. "sirâc ne demek" becomes `siraç & demek` and
     matches 7 chunks, but "sirâcın anlamı nedir" becomes `siraç & anlami & ne` and matches
-    none — an ordinary word like "ne" is what breaks it. Three spellings of one question
+    none - an ordinary word like "ne" is what breaks it. Three spellings of one question
     gave three different gate outcomes, and the only one that opened did so on a vector
     distance unrelated to sirâc. That is noise, not something to tune.
 

@@ -1,4 +1,4 @@
-# Siraj RAG — Coolify / docker compose kurulumu.
+# Siraj RAG - Coolify / docker compose kurulumu.
 # Coolify'da: yeni kaynak > Docker Compose > bu dosyayı yapıştırın, ortam değişkenlerini girin.
 # Gizli değerler Coolify ortam sekmesinden (veya yanındaki .env'den) gelir:
 #   SIRAJ_IMAGE, POSTGRES_PASSWORD, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, API_TOKEN

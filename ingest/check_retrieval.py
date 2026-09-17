@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Getirim (retrieval) kalite kontrolü — LLM'e geçmeden önce çalıştırın.
+"""Getirim (retrieval) kalite kontrolü - LLM'e geçmeden önce çalıştırın.
 
 Uygulamanın örnek sorularını hibrit aramadan geçirir ve dönen ilk pasajları gösterir.
 Sonuçlar konuyla ilgiliyse chat'e geçin; alakasız/çöp geliyorsa bölümleme veya Türkçe
@@ -21,7 +21,7 @@ DEFAULT_QUESTIONS_EN = [
     "What invalidates the fast?",
     "Who is required to pay zakat?",
     "How does Bediuzzaman prove the resurrection?",
-    "How do I fix a Python import error?",  # alakasız — boş kalması beklenir
+    "How do I fix a Python import error?",  # alakasız - boş kalması beklenir
 ]
 
 DEFAULT_QUESTIONS = [
@@ -31,7 +31,7 @@ DEFAULT_QUESTIONS = [
     "Zekat kimlere farzdır?",
     "Abdest nasıl alınır?",
     "Bediüzzaman haşri nasıl ispat ediyor?",  # risale (Onuncu Söz) beklenir
-    "Bugünün duası nedir?",  # uygulama durumu — alakasız gelmesi/boş kalması beklenir
+    "Bugünün duası nedir?",  # uygulama durumu - alakasız gelmesi/boş kalması beklenir
 ]
 
 

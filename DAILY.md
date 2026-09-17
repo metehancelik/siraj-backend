@@ -1,4 +1,4 @@
-# `/v1/daily` — günün ayeti, hadisi ve duası
+# `/v1/daily` - günün ayeti, hadisi ve duası
 
 Mobil uygulamanın "Günün Sayfası" kartlarını **seçen** uç nokta. Sözleşme burada; uygulama
 tarafındaki karşılığı `siraj-mobile/src/services/` altındaki günlük içerik servisleridir.
@@ -23,7 +23,7 @@ Bunun üç sonucu var:
    görüntüsü tarihinin elle seçilme sebebi). Ramazan, Cuma, kandil gibi günlere içerik
    bağlanamıyor.
 3. **Düzeltme mağaza turu gerektiriyor.** Bozuk bir çeviri, yanlış eşleşmiş bir hadis ya da
-   30 kayıtlık dua havuzunu büyütmek — hepsi yeni sürüm demek.
+   30 kayıtlık dua havuzunu büyütmek - hepsi yeni sürüm demek.
 
 ## Tasarım kararı: seçimi merkezîleştir, yedeği yerelde bırak
 
@@ -48,7 +48,7 @@ Uygulamayı İngilizce kullanan kişiye Türkçe metin gösterip altına "Turkis
 yazmak bir çözüm değil, özürdü. Ayet her dilde var (üç sürüm birlikte saklanıyor), o yüzden
 hiç null dönmez.
 
-`date`, **uygulamanın yerel takvim günü** (`YYYY-MM-DD`) — sunucu `now()` kullanmaz. Sunucu
+`date`, **uygulamanın yerel takvim günü** (`YYYY-MM-DD`) - sunucu `now()` kullanmaz. Sunucu
 okuyucunun saat dilimini bilemez ve gün, kullanıcının gece yarısında dönmelidir
 (`siraj-mobile/src/utils/dayIndex.ts`). Tarih yoldadır ki cevap CDN'de önbelleklenebilsin.
 
@@ -91,7 +91,7 @@ düşüp "Türkçe meali" notunu gösteriyor.
 
 ### Hata
 
-Uç nokta 5xx dönerse ya da ulaşılamazsa uygulama sessizce yerel mantığa düşer — kullanıcıya
+Uç nokta 5xx dönerse ya da ulaşılamazsa uygulama sessizce yerel mantığa düşer - kullanıcıya
 hata gösterilmez, çünkü gösterilecek içerik zaten vardır. `404` kullanılmaz: kayıtlı bir gün
 yoksa sunucu da deterministik rotasyona düşer (aşağıda).
 
@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS daily_schedule (
 ```
 
 `daily_hadith` / `daily_dua` **`chunks` üzerinden karşılanamaz**: `chunks` bir arama
-korpüsüdür — pencerelenmiş metin ve embedding. Oradaki `hadis` kaynağı *Hadislerle İslam*
+korpüsüdür - pencerelenmiş metin ve embedding. Oradaki `hadis` kaynağı *Hadislerle İslam*
 cilt metnidir, kartın istediği kısa söz + ravi + derece değil; `dua` kaynağı da genel
 pencereleme yolundan geçer. Kart korpüsü bugün yalnızca uygulamanın içinde vardır ve
 tohumlanması gerekir.
@@ -175,7 +175,7 @@ Ingest-şeklinde bir iştir: `siraj-backend/CLAUDE.md` gereği **yerel Mac'ten, 
   `bundled` ayrımını korur, çevrimdışı notu bugünkü gibi görünür.
 - **`CACHE_SCHEMA_VERSION` bump edilmez**: Türkçe meal Diyanet Vakfı olarak kalıyor, yani
   gösterilen metin aynı. Uç noktanın döndürdüğü ayet, bugün cihazın alquran.cloud'dan
-  aldığının birebir aynısıdır — tek fark, isteği kimin yaptığı.
+  aldığının birebir aynısıdır - tek fark, isteği kimin yaptığı.
 - `siraj-mobile/STORE.md` veri güvenliği bölümüne bir cümle: uygulama artık
   `siraj-api.ravey.app`'e sohbet sorusunun yanında bir de **tarih** gönderiyor.
 
@@ -190,17 +190,17 @@ Ingest-şeklinde bir iştir: `siraj-backend/CLAUDE.md` gereği **yerel Mac'ten, 
    kodda görünmez; dosya olunca seçim aylar sonra diff'te okunabiliyor ve veritabanı
    yeniden kurulduğunda tek komutla geri geliyor.
 
-   İlk parti: 5 Ağustos — 1 Kasım 2026 arası **39 gün**. Sıralı yürüyüşün o günlerde
+   İlk parti: 5 Ağustos - 1 Kasım 2026 arası **39 gün**. Sıralı yürüyüşün o günlerde
    verdiği ayet günlük kart olarak kötü okunuyordu; ölçüt üç başlıkta ve her satırın
    notunda hangisi olduğu yazıyor (çıplak tehdit, bir önceki ayete bağlı parça, dönemin
    muhataplarına dönük polemik; ayrıca fıkhî hüküm parçası ve anlatı ortası). 90 günün
-   39'u — yani bu bir istisna değil, yöntemin doğal sonucu.
+   39'u - yani bu bir istisna değil, yöntemin doğal sonucu.
 
    Yalnızca ayet sabitlendi; hadis ve dua o günlerde de rotasyonda. İkisinin korpüsü zaten
    küratörlükten geçmiş, sorun sıralı yürüyüşe özgü.
 
    **Kandil günleri (yapıldı, 2026):** tarihler Diyanet'in kendi takviminden alındı
-   (`vakithesaplama.diyanet.gov.tr/dinigunler.php?yil=2026`) — aritmetik hicrî takvimler
+   (`vakithesaplama.diyanet.gov.tr/dinigunler.php?yil=2026`) - aritmetik hicrî takvimler
    Diyanet'inkinden bir gün kayabildiği için hesaplanmadı, resmî listeden okundu.
    - 24 Ağustos 2026, Mevlid Kandili → Enbiyâ 21:107 + salavat hadisi
    - 10 Aralık 2026, Üç Ayların Başlangıcı / Regaib → Âl-i İmrân 3:133 + tövbe duası

@@ -17,7 +17,7 @@ LLM anahtarı **sadece backend'de** durur; mobil uygulama modele doğrudan eriş
 
 ## ⚠️ CPU-only sunucu: 12B yerine küçük model şart
 
-Mevcut `gemma-4-12b` ölçüldü — CPU'da mobil sohbet için kullanılamaz:
+Mevcut `gemma-4-12b` ölçüldü - CPU'da mobil sohbet için kullanılamaz:
 
 | | Üretim | Prompt işleme | ~120 kelimelik cevap |
 |---|---|---|---|
@@ -26,13 +26,13 @@ Mevcut `gemma-4-12b` ölçüldü — CPU'da mobil sohbet için kullanılamaz:
 RAG'de getirilen bağlam her soruda değiştiği için prompt işleme cache'lenmez; hiçbir ayar
 12B'yi CPU'da kabul edilebilir yapmaz.
 
-**Çözüm: sohbet modelini küçültün.** RAG bunu güvenli kılar — modelin işi artık bilgiyi
+**Çözüm: sohbet modelini küçültün.** RAG bunu güvenli kılar - modelin işi artık bilgiyi
 *hatırlamak* değil, önüne konan Diyanet metnini Türkçe özetleyip kaynak göstermek ve metinde
 yoksa reddetmek. Bu görevi 3–4B'lik bir model de yapar; zor bilgi getirilen bağlamda durur.
 
 Öneri (CPU'da llama.cpp ile, hızlıdan kaliteliye):
-1. **Gemma 3 4B Instruct (Q4_K_M)** — tanıdık aile, iyi Türkçe, güçlü talimat takibi. İlk bunu deneyin.
-2. **Qwen2.5-7B-Instruct (Q4_K_M)** — 4B kalitesi ince gelirse; ~1.5× daha yavaş ama daha isabetli.
+1. **Gemma 3 4B Instruct (Q4_K_M)** - tanıdık aile, iyi Türkçe, güçlü talimat takibi. İlk bunu deneyin.
+2. **Qwen2.5-7B-Instruct (Q4_K_M)** - 4B kalitesi ince gelirse; ~1.5× daha yavaş ama daha isabetli.
 
 Aynı `timings` ölçümünü yeni modelde tekrarlayıp karar verin:
 ```bash
@@ -56,7 +56,7 @@ CPU'da soru başına kabaca **~15–45 saniye** (çekirdek sayısı ve bellek ba
 Anlık sohbet olmaz; "düşünüp kaynaklı cevap veren arkadaş" deneyimidir. Mobil taraf bunu
 yumuşatır: kaynaklar üretimden önce anında gösterilir, cevap token token akar, "cevap
 hazırlanıyor" göstergesi bekleyişi taşır. Hız kritikse, kiralık küçük bir GPU (L4/A10) aynı
-işi 2–4 saniyeye indirir — ama backend her iki durumda da aynı, sadece `LLM_BASE_URL` değişir.
+işi 2–4 saniyeye indirir - ama backend her iki durumda da aynı, sadece `LLM_BASE_URL` değişir.
 
 ---
 
@@ -112,9 +112,9 @@ değişkenlerini girin:
 | `LLM_MODEL` | `gemma-3-4b-it` (CPU önerisi) |
 | `API_TOKEN` | mobil uygulamanın göndereceği Bearer (boş = kimlik doğrulama kapalı) |
 
-Deploy edince: `backend` (:8000), `embeddings` (TEI — model gömülü, indirme yok, hemen "Ready")
+Deploy edince: `backend` (:8000), `embeddings` (TEI - model gömülü, indirme yok, hemen "Ready")
 ve `db` (pgvector) ayağa kalkar. Backend şemayı otomatik uygular. Coolify'da 8000'i bir
-domain'e bağlayın (reverse proxy SSE için buffering'i kapatmalı — aşağıdaki nginx notu).
+domain'e bağlayın (reverse proxy SSE için buffering'i kapatmalı - aşağıdaki nginx notu).
 
 `POSTGRES_PASSWORD` **boş olamaz** (boşsa pgvector başlamaz, backend "connection refused" alır).
 
@@ -159,7 +159,7 @@ topoloji: her şeyi VPS'e koyun, `data/*.jsonl` dosyalarını oraya kopyalayın.
 biri (1024 boyut, 8192 bağlam, önek gerektirmez).
 
 **Önce kavram:** LiteLLM model *çalıştırmaz*, sadece *yönlendirir*. gemma'nız da aslında
-LiteLLM'in arkasında bir sunucuda koşuyor. bge-m3 için de bir çalıştırıcı gerekir — en uygunu
+LiteLLM'in arkasında bir sunucuda koşuyor. bge-m3 için de bir çalıştırıcı gerekir - en uygunu
 **HF Text Embeddings Inference (TEI)**. TEI'yi çalıştırıp backend'e iki şekilde eriştirebilirsiniz.
 
 **TEI'yi çalıştırın** (bge-m3, ~2.3GB RAM; ilk açılışta modeli indirir):
@@ -171,7 +171,7 @@ docker run -d --name tei -p 8080:80 -v $PWD/tei-data:/data \
 ```
 > `docker-compose.yml` kullanıyorsanız `embeddings` servisi bunu zaten yapar; ayrıca çalıştırmayın.
 
-**Erişim — iki yol:**
+**Erişim - iki yol:**
 
 | | Nasıl | Ne zaman |
 |---|---|---|
@@ -191,11 +191,11 @@ Kaydedip LiteLLM'i yeniden başlatın; artık `POST <litellm>/v1/embeddings` (mo
 mevcut Bearer anahtarınız) çalışır.
 
 > Öneri: Sorgu anındaki tek embedding için B (birleşik kapı) hoş; ama **ingest 235.000 çağrı
-> yapar** — orada A (doğrudan TEI) hem daha hızlı hem LiteLLM loglarını şişirmez. İkisini
+> yapar** - orada A (doğrudan TEI) hem daha hızlı hem LiteLLM loglarını şişirmez. İkisini
 > karıştırabilirsiniz: ingest'i `EMBEDDING_MODE=tei` ile, backend'i `openai` ile çalıştırın.
 
 > Alternatif model: `intfloat/multilingual-e5-large` (1024 boyut). Kullanırsanız `.env`'de
-> `EMBEDDING_USE_E5_PREFIX=true` yapın — e5 `query:`/`passage:` önekleri ister, bge-m3 istemez.
+> `EMBEDDING_USE_E5_PREFIX=true` yapın - e5 `query:`/`passage:` önekleri ister, bge-m3 istemez.
 
 ### 2) Postgres + pgvector
 
@@ -238,7 +238,7 @@ python -m ingest.check_retrieval
 ```
 
 Örnek soruların ilk pasajları konuyla ilgiliyse devam edin. "Bugünün duası nedir?" bir
-uygulama-durumu sorusudur; alakasız gelmesi/boş kalması normaldir — sohbet bunu nazikçe
+uygulama-durumu sorusudur; alakasız gelmesi/boş kalması normaldir - sohbet bunu nazikçe
 reddeder.
 
 ### 6) Sunucuyu başlat
@@ -254,7 +254,7 @@ Sağlık kontrolü: `curl localhost:8000/health` → `{"status":"ok","chunks": N
 
 ## API
 
-`POST /v1/chat` — `Authorization: Bearer <API_TOKEN>` (ayarlanmışsa)
+`POST /v1/chat` - `Authorization: Bearer <API_TOKEN>` (ayarlanmışsa)
 
 ```json
 { "messages": [ {"role":"user","content":"Namaz nasıl kılınır?"} ] }
@@ -270,13 +270,13 @@ Yanıt `text/event-stream`, her satır `data: {json}`:
 geldiğinde soru önce Türkçeye çevrilip öyle aranır, model kaynakları Türkçe okuyup cevabı
 İngilizce yazar (kaynak etiketleri de İngilizceye çevrilir, başlıklar Türkçe kalır).
 
-Çeviri neden gerekli: İngilizce sorguyu doğrudan aratmak ölçüldüğünde çalışmadı — alaka
+Çeviri neden gerekli: İngilizce sorguyu doğrudan aratmak ölçüldüğünde çalışmadı - alaka
 eşiği (`retrieval_max_distance`) çapraz-dilli mesafelerde ayırt etmiyor ("What is the capital
 of France?" 0.31 alıp gerçek sorulardan yakın çıktı) ve `tsv` kolonu `to_tsvector('turkish')`
 olduğu için tam-metin araması hiç devreye girmiyor. Türkçeye çevrilince ikisi de ölçülüp
 ayarlanmış haliyle çalışır. Bedeli soru başına ~3-3,5 sn (tekrar eden sorular önbellekten).
 | `delta` | `text` | üretilen metin parçası (çok kez) |
-| `done` | — | tamamlandı |
+| `done` | - | tamamlandı |
 | `error` | `message` | hata |
 
 Mobil taraf `siraj/src/services/chatService.ts` içinde bu protokolü XHR ile akıtarak okur.

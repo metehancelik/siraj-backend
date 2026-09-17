@@ -52,12 +52,12 @@ tarafını anlatır ve bu proje için **geçerli değildir**.
      | awk '{print "DATABASE_URL=postgresql://siraj:"$1"@localhost:5433/siraj"}' > .env
    ```
 
-4. **Ingest'ten önce iki doğrulamayı yap — atlanamaz:**
+4. **Ingest'ten önce iki doğrulamayı yap - atlanamaz:**
    - Tünelden `SELECT count(*) FROM chunks` beklenen büyüklüğü dönmeli. `0`
      dönüyorsa tünel yanlış yere gidiyordur ve Mac'te boş bir korpüs kurulur.
    - Yerel MPS vektörleri korpüsle aynı uzayda mı: DB'den bir chunk'ın
      `content`'ini yeniden embed edip saklı `embedding` ile kosinüs benzerliğine
-     bak — `1.000000` çıkmalı. Uzak embedding servisine sorma, `.env`'de anahtar
+     bak - `1.000000` çıkmalı. Uzak embedding servisine sorma, `.env`'de anahtar
      yok (401 döner).
 
 5. **Çalıştır:**

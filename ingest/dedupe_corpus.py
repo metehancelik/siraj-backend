@@ -7,7 +7,7 @@
 
 Why a one-off script: ingest no longer loads the same text twice (see
 ingest.ingest._deduplicate), but rows loaded before that fix do not disappear on their
-own — a re-run sees the surviving row as already present, skips it, and leaves the twins
+own - a re-run sees the surviving row as already present, skips it, and leaves the twins
 in place.
 
 Deleted rows can always be rebuilt from the crawler's jsonl files; this removes extra
@@ -60,7 +60,7 @@ async def run(source: str | None, apply: bool) -> None:
         print(f"titles to rewrite : {len(retitled)}")
 
         if not apply:
-            print("\n(dry run — nothing changed; pass --apply to carry it out)")
+            print("\n(dry run - nothing changed; pass --apply to carry it out)")
             for title, kept_id in retitled[:5]:
                 old = await conn.fetchval("SELECT title FROM chunks WHERE id=$1", kept_id)
                 print(f"  {old}\n   -> {title}")
