@@ -1,4 +1,4 @@
-"""Kendi OpenAI-uyumlu gemma endpoint'inizden token akışı."""
+"""Token streaming from your own OpenAI-compatible gemma endpoint."""
 import json
 from collections.abc import AsyncIterator
 
@@ -8,7 +8,7 @@ from .config import settings
 
 
 async def complete(messages: list[dict], max_tokens: int, temperature: float = 0.0) -> str:
-    """Akışsız tek seferlik tamamlama (kısa yardımcı işler için, ör. sorgu çevirisi)."""
+    """Non-streaming one-shot completion (for short helper tasks, e.g. query translation)."""
     url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
     headers = {"Content-Type": "application/json"}
     if settings.llm_api_key:
@@ -28,7 +28,7 @@ async def complete(messages: list[dict], max_tokens: int, temperature: float = 0
 
 
 async def stream_completion(messages: list[dict]) -> AsyncIterator[str]:
-    """messages: [{role, content}]. Üretilen metin parçalarını (delta) yield eder."""
+    """messages: [{role, content}]. Yields the generated text pieces (deltas)."""
     url = f"{settings.llm_base_url.rstrip('/')}/chat/completions"
     headers = {"Content-Type": "application/json"}
     if settings.llm_api_key:

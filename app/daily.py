@@ -1,8 +1,8 @@
-"""Günün ayeti, hadisi ve duası - hangisi olduğunu seçer, içeriği derler.
+"""Verse, hadith and supplication of the day - picks which one it is and assembles it.
 
-Sözleşme ve gerekçeler: DAILY.md. Özet: seçim burada merkezîleşir, uygulama yine de
-paketindeki korpüsle çevrimdışı çalışabilir; iki taraf aynı gün aynı kaydı seçsin diye
-rotasyon birebir aynı aritmetiktir.
+Contract and rationale: DAILY.md. In short: the choice is centralised here, yet the app can
+still work offline with the corpus in its bundle; the rotation is the exact same
+arithmetic on both sides so that they pick the same record on the same day.
 """
 import datetime as dt
 import json
@@ -17,11 +17,12 @@ log = logging.getLogger("siraj")
 
 TOTAL_AYAHS = 6236
 
-# Uygulamanın `quranService.ts`'te kullandığı sürümlerin aynısı. İngilizce meal Saheeh
-# International: Asad ayetleri bir öncekinin devamı sayıp küçük harfle başlıyor ve arkaik
-# kuruyordu, tek başına duran bir kart için yanlış. tr.vakfi (Diyanet Vakfı
-# meali) bilerek korunuyor: uç noktanın döndürdüğü ayet, cihazın bugün doğrudan aldığının
-# birebir aynısı olmalı - değişen tek şey isteği kimin yaptığı.
+# The same editions the app uses in `quranService.ts`. The English translation is Saheeh
+# International: Asad treats verses as continuations of the previous one, starting them in
+# lowercase, and reads archaic, which is wrong for a card that stands alone. tr.vakfi
+# (the Diyanet Vakfı meal) is kept on purpose: the verse the endpoint returns must be
+# identical to what the device fetches directly today - the only change is who makes the
+# request.
 _EDITIONS = "quran-uthmani,en.sahih,tr.vakfi"
 _ARABIC_EDITION = "quran-uthmani"
 _ENGLISH_EDITION = "en.sahih"
@@ -31,16 +32,16 @@ _EPOCH = dt.date(1970, 1, 1)
 
 
 class DailyUnavailable(RuntimeError):
-    """Kart derlenemedi. Uygulama sessizce kendi yerel yoluna düşer, kullanıcıya hata
-    gösterilmez - gösterilecek içerik zaten vardır."""
+    """The card could not be assembled. The app silently falls back to its local path and
+    no error is shown to the user - there is content to show anyway."""
 
 
 def days_since_epoch(day: dt.date) -> int:
-    """Mobildeki `daysSinceEpoch` ile aynı sayı.
+    """The same number as `daysSinceEpoch` on mobile.
 
-    Orada yerel gece yarısına göre hesaplanır ve tarih bize zaten istemcinin YEREL günü
-    olarak gelir (yolun içinde), dolayısıyla takvim günü farkını almak yeter. Sunucunun
-    kendi `now()`'ı hiçbir yerde kullanılmaz: okuyucunun saat dilimini bilemez.
+    There it is computed against local midnight, and the date reaches us already as the
+    client's LOCAL day (in the path), so the calendar-day difference is enough. The
+    server's own `now()` is never used: it cannot know the reader's time zone.
     """
     return day.toordinal() - _EPOCH.toordinal()
 
@@ -56,7 +57,7 @@ async def _fetch_ayah_from_source(global_number: int) -> dict:
     arabic = items.get(_ARABIC_EDITION)
     turkish = items.get(_TURKISH_EDITION)
     if not arabic or not turkish:
-        raise DailyUnavailable(f"Ayet {global_number}: Arapça veya Türkçe sürüm gelmedi")
+        raise DailyUnavailable(f"Ayah {global_number}: Arabic or Turkish edition missing")
 
     return {
         "global_number": global_number,
@@ -71,10 +72,11 @@ async def _fetch_ayah_from_source(global_number: int) -> dict:
 
 
 async def _ayah(conn: asyncpg.Connection, global_number: int) -> dict:
-    """Ayeti tablodan verir; yoksa kaynağından bir kez alıp yazar.
+    """Returns the verse from the table; if missing, fetches it once from the source and
+    stores it.
 
-    Yazma çakışması sorun değil: aynı ayeti iki istek birden çekerse ikisi de aynı metni
-    yazar (ON CONFLICT DO NOTHING).
+    A write race is harmless: if two requests fetch the same verse at once, both write the
+    same text (ON CONFLICT DO NOTHING).
     """
     row = await conn.fetchrow("SELECT * FROM ayah_text WHERE global_number = $1", global_number)
     if row is None:
@@ -90,7 +92,7 @@ async def _ayah(conn: asyncpg.Connection, global_number: int) -> dict:
         )
         row = fetched
 
-    # Alanlar mobildeki AyahContent ile birebir; uygulama ek dönüşüm yapmaz.
+    # Fields match AyahContent on mobile exactly; the app does no extra mapping.
     return {
         "globalNumber": row["global_number"],
         "surahNumber": row["surah_number"],
@@ -104,27 +106,27 @@ async def _ayah(conn: asyncpg.Connection, global_number: int) -> dict:
 
 
 def _payload(value) -> dict | None:
-    """asyncpg jsonb'yi metin olarak döndürür (retrieval.py'de de böyle çözülüyor)."""
+    """asyncpg returns jsonb as text (retrieval.py decodes it the same way)."""
     if value is None:
         return None
     return json.loads(value) if isinstance(value, str) else value
 
 
-# İngilizce havuz bundan küçükse o kart İngilizcede hiç gösterilmez: iki haftadan önce
-# tekrar eden bir kart "günün" kartı olmaktan çıkar. Türkçe metni İngilizce arayüzde
-# göstermek ise hiç seçenek değil. Sayı veriye göre değil bu ilkeye göre seçildi ve
-# mobildeki MIN_ENGLISH_POOL ile aynı olmalı.
+# If the English pool is smaller than this, the card is not shown in English at all: a
+# card that repeats within two weeks stops being the card "of the day". Showing Turkish
+# text in the English interface is not an option either. The number was chosen from this
+# principle, not from the data, and must match MIN_ENGLISH_POOL on mobile.
 MIN_POOL = 14
 
 
 async def _rotating(
     conn: asyncpg.Connection, table: str, day: int, english_field: str | None
 ) -> dict | None:
-    """`table`'dan günün kaydı: paketteki sırayla aynı rotasyon.
+    """The day's record from `table`: the same rotation as the order in the bundle.
 
-    `english_field` verildiğinde havuz yalnızca o alanı dolu olan kayıtlara daralır ve
-    sıra bu daraltılmış küme üzerinde yürür. Havuz `MIN_POOL`'un altındaysa kart yok
-    sayılır (None) - çağıran onu cevaptan düşürür.
+    When `english_field` is given, the pool narrows to records with that field filled and
+    the order walks over that narrowed set. If the pool is below `MIN_POOL` the card is
+    treated as absent (None) - the caller drops it from the response.
     """
     if english_field:
         rows = await conn.fetch(
@@ -139,12 +141,12 @@ async def _rotating(
 
     total = await conn.fetchval(f"SELECT count(*) FROM {table}")
     if not total:
-        raise DailyUnavailable(f"{table} boş - tohumlama yapılmamış (bkz. DAILY.md)")
+        raise DailyUnavailable(f"{table} is empty - not seeded (see DAILY.md)")
     payload = await conn.fetchval(
         f"SELECT payload FROM {table} WHERE ordinal = $1", day % total
     )
     if payload is None:
-        raise DailyUnavailable(f"{table}: {day % total}. sıra yok, tohumlama eksik")
+        raise DailyUnavailable(f"{table}: no ordinal {day % total}, seeding incomplete")
     return _payload(payload)
 
 
@@ -153,11 +155,11 @@ async def _pinned(conn: asyncpg.Connection, table: str, record_id: str) -> dict 
 
 
 async def build_daily(day: dt.date, lang: str = "tr") -> dict:
-    """Verilen YEREL takvim günü için üç kartı derler.
+    """Assembles the three cards for the given LOCAL calendar day.
 
-    Önce `daily_schedule`'a bakılır; satır yoksa (ya da bir alanı boşsa) deterministik
-    rotasyona düşülür - uygulamanın çevrimdışıyken yaptığının aynısı. Bu yüzden her günü
-    elle doldurmak gerekmez.
+    `daily_schedule` is checked first; if there is no row (or a field is empty) it falls
+    back to the deterministic rotation - the same thing the app does offline. So not every
+    day has to be filled in by hand.
     """
     index = days_since_epoch(day)
     english = lang.lower().startswith("en")
@@ -182,7 +184,8 @@ async def build_daily(day: dt.date, lang: str = "tr") -> dict:
         dua = dua or await _rotating(conn, "daily_dua", index, "english" if english else None)
         ayah = await _ayah(conn, ayah_global)
 
-    # Ayet her dilde var (üç sürüm birlikte saklanıyor); hadis ve dua İngilizce havuzu
-    # yetmediğinde null döner ve uygulama o kartı hiç çizmez.
+    # The verse exists in every language (all three editions are stored together); hadith
+    # and supplication return null when the English pool is too small, and the app does
+    # not draw that card at all.
     return {"date": day.isoformat(), "lang": "en" if english else "tr",
             "ayah": ayah, "hadith": hadith, "dua": dua}

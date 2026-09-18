@@ -1,13 +1,13 @@
--- Siraj RAG şeması. Mevcut Postgres'e uygulanabilir: psql "$DATABASE_URL" -f schema.sql
--- pgvector + unaccent eklentileri gerekir (resmi postgres imajı unaccent'i içerir;
--- pgvector için: Debian/Ubuntu apt install postgresql-16-pgvector).
+-- Siraj RAG schema. Can be applied to an existing Postgres: psql "$DATABASE_URL" -f schema.sql
+-- Requires the pgvector + unaccent extensions (the official postgres image ships unaccent;
+-- for pgvector on Debian/Ubuntu: apt install postgresql-16-pgvector).
 
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
--- unaccent varsayılan olarak STABLE'dır; generated kolonda/indekste kullanmak için
--- sözlüğü sabitleyip IMMUTABLE bir sarmalayıcı tanımlıyoruz (standart yöntem).
--- Amaç: kullanıcı "zekat/oruc/iman" yazınca metindeki "Zekât/oruç/îmân" ile eşleşsin.
+-- unaccent is STABLE by default; to use it in a generated column/index we pin the
+-- dictionary and define an IMMUTABLE wrapper (the standard approach).
+-- Goal: a user typing "zekat/oruc/iman" matches "Zekât/oruç/îmân" in the text.
 CREATE OR REPLACE FUNCTION f_unaccent(text) RETURNS text
     LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT AS
 $$ SELECT unaccent('unaccent'::regdictionary, $1) $$;
@@ -15,19 +15,19 @@ $$ SELECT unaccent('unaccent'::regdictionary, $1) $$;
 CREATE TABLE IF NOT EXISTS chunks (
     id          bigserial PRIMARY KEY,
     source      text  NOT NULL,          -- meal | tefsir | hadis | fetva | dua | ilmihal | risale | dia
-    ref_id      text  NOT NULL,          -- kaynak kaydın orijinal id'si
+    ref_id      text  NOT NULL,          -- original id of the source record
     chunk_index int   NOT NULL DEFAULT 0,
     title       text,
     url         text,
     content     text  NOT NULL,
     meta        jsonb NOT NULL DEFAULT '{}',
     embedding   vector(1024),
-    -- Türkçe kök bulucu + aksan katlama ile tam-metin arama vektörü
+    -- full-text search vector with the Turkish stemmer + accent folding
     tsv tsvector GENERATED ALWAYS AS (to_tsvector('turkish', f_unaccent(content))) STORED,
     UNIQUE (source, ref_id, chunk_index)
 );
 
--- Yaklaşık en yakın komşu (kosinüs). Büyük veri yüklendikten sonra kurmak daha hızlıdır.
+-- Approximate nearest neighbour (cosine). Faster to build after a bulk load.
 CREATE INDEX IF NOT EXISTS chunks_embedding_idx
     ON chunks USING hnsw (embedding vector_cosine_ops);
 
@@ -38,18 +38,18 @@ CREATE INDEX IF NOT EXISTS chunks_source_idx
     ON chunks (source);
 
 -- ---------------------------------------------------------------------------
--- Günün kartları (/v1/daily). Sözleşme: DAILY.md
+-- Daily cards (/v1/daily). Contract: DAILY.md
 --
--- Bunlar `chunks` üzerinden karşılanamaz: chunks bir arama korpüsüdür (pencerelenmiş
--- metin + embedding). Oradaki `hadis` kaynağı *Hadislerle İslam* cilt metnidir, kartın
--- istediği kısa söz + ravi + derece değil. Kart korpüsü mobil uygulamanın paketinden
--- tohumlanır: `python -m ingest.seed_daily --mobile ../siraj-mobile`.
+-- These cannot be served from `chunks`: chunks is a search corpus (windowed text +
+-- embedding). Its `hadis` source is the volume text of *Hadislerle İslam*, not the short
+-- saying + narrator + grade a card needs. The card corpus is seeded from the mobile app's
+-- bundle: `python -m ingest.seed_daily --mobile ../siraj-mobile`.
 -- ---------------------------------------------------------------------------
 
--- payload: mobildeki HadithContent / DuaContent, olduğu gibi. Uygulama ile aynı şekil
--- olması, uzak yol ile çevrimdışı yolun aynı modeli üretmesi demek.
--- ordinal: paketteki dizi sırası. Rotasyon buna göre yürüdüğü için iki taraf aynı gün
--- aynı kaydı seçer.
+-- payload: the mobile HadithContent / DuaContent, as is. Matching the app's shape means
+-- the remote path and the offline path produce the same model.
+-- ordinal: array position in the bundle. Rotation walks this order, so both sides pick
+-- the same record on the same day.
 CREATE TABLE IF NOT EXISTS daily_hadith (
     id      text  PRIMARY KEY,
     ordinal int   NOT NULL UNIQUE,
@@ -62,9 +62,9 @@ CREATE TABLE IF NOT EXISTS daily_dua (
     payload jsonb NOT NULL
 );
 
--- Ayet metni alquran.cloud'dan bir kez alınıp burada durur; Türkçesi uygulamanın bugün
--- gösterdiği Diyanet Vakfı meali (tr.vakfi), yani görünen çeviri değişmiyor. Kazanç,
--- üçüncü tarafa her cihazın her gün değil sunucunun bir kez gitmesi.
+-- Ayah text is fetched once from alquran.cloud and kept here; the Turkish is the Diyanet
+-- Vakfı meal (tr.vakfi) the app shows today, so the visible translation does not change.
+-- The gain: the server hits the third party once, instead of every device every day.
 CREATE TABLE IF NOT EXISTS ayah_text (
     global_number   int  PRIMARY KEY,
     surah_number    int  NOT NULL,
@@ -77,8 +77,8 @@ CREATE TABLE IF NOT EXISTS ayah_text (
     fetched_at      timestamptz NOT NULL DEFAULT now()
 );
 
--- Yalnızca müdahale edilen günler; boş bırakılan alan o tür için rotasyona düşer.
--- Her günü doldurmak gerekmez.
+-- Only overridden days; a field left empty falls back to rotation for that type.
+-- There is no need to fill every day.
 CREATE TABLE IF NOT EXISTS daily_schedule (
     date        date PRIMARY KEY,
     ayah_global int,
@@ -87,11 +87,11 @@ CREATE TABLE IF NOT EXISTS daily_schedule (
     note        text
 );
 
--- ON DELETE SET NULL sonradan eklendi; mevcut kurulumda kısıt eskisi gibi kalmasın.
--- Gerekçesi davranışın kendisi: korpüsten bir kayıt düşerse (yanlış künye, kartlık
--- olmayan içerik) o güne sabitlenmiş seçim kendiliğinden rotasyona düşmeli. Eskisi
--- tohumlamayı kilitliyordu: seed_daily tabloyu boşaltıp yeniden yazdığı için, sabitlenmiş
--- tek bir kayıt yüzünden bütün korpüs güncellemesi geri alınıyor ve bu SESSİZCE oluyordu.
+-- ON DELETE SET NULL was added later; existing installs must not keep the old constraint.
+-- The reason is the behaviour itself: if a record drops out of the corpus (wrong
+-- attribution, content unfit for a card) the choice pinned to that day should fall back
+-- to rotation on its own. The old constraint blocked seeding: since seed_daily empties and
+-- rewrites the table, a single pinned record rolled back the whole corpus update, SILENTLY.
 DO $$
 BEGIN
     ALTER TABLE daily_schedule DROP CONSTRAINT IF EXISTS daily_schedule_hadith_id_fkey;

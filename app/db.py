@@ -13,7 +13,7 @@ _SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schema.sql"
 
 
 async def get_pool(retries: int = 10, delay: float = 3.0) -> asyncpg.Pool:
-    """Bağlantı havuzunu döndürür; DB henüz hazır değilse (compose sırası) bekler."""
+    """Returns the connection pool; waits if the DB is not ready yet (compose ordering)."""
     global _pool
     if _pool is not None:
         return _pool
@@ -24,13 +24,13 @@ async def get_pool(retries: int = 10, delay: float = 3.0) -> asyncpg.Pool:
             return _pool
         except (OSError, asyncpg.PostgresError) as exc:
             last = exc
-            log.warning("Postgres'e bağlanılamadı (%d/%d): %s", attempt, retries, exc)
+            log.warning("Could not connect to Postgres (%d/%d): %s", attempt, retries, exc)
             await asyncio.sleep(delay)
-    raise RuntimeError(f"Postgres'e bağlanılamadı: {last}")
+    raise RuntimeError(f"Could not connect to Postgres: {last}")
 
 
 async def migrate() -> None:
-    """schema.sql'i uygular (idempotent). Yetki yetmezse uyarır, çökmeye devam etmez."""
+    """Applies schema.sql (idempotent). Warns instead of crashing if privileges fall short."""
     if not _SCHEMA_PATH.exists():
         return
     sql = _SCHEMA_PATH.read_text(encoding="utf-8")
@@ -38,10 +38,10 @@ async def migrate() -> None:
     try:
         async with pool.acquire() as conn:
             await conn.execute(sql)
-        log.info("Şema uygulandı (schema.sql)")
+        log.info("Schema applied (schema.sql)")
     except asyncpg.PostgresError as exc:
-        log.warning("Şema otomatik uygulanamadı (%s). "
-                    "Elle çalıştırın: psql \"$DATABASE_URL\" -f schema.sql", exc)
+        log.warning("Could not apply schema automatically (%s). "
+                    "Run it by hand: psql \"$DATABASE_URL\" -f schema.sql", exc)
 
 
 async def close_pool() -> None:

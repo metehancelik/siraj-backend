@@ -1,8 +1,8 @@
-"""Siraj RAG backend - mobil sohbet için SSE akışlı /v1/chat.
+"""Siraj RAG backend - SSE-streaming /v1/chat for the mobile chat.
 
-Mobil protokolü (text/event-stream), her satır `data: {json}`:
-  {"type":"sources", "sources":[{n,source,label,title,url}]}   (bir kez, üretimden önce)
-  {"type":"delta",   "text":"..."}                              (çok kez)
+Mobile protocol (text/event-stream), each line `data: {json}`:
+  {"type":"sources", "sources":[{n,source,label,title,url}]}   (once, before generation)
+  {"type":"delta",   "text":"..."}                              (many times)
   {"type":"done"}
   {"type":"error",   "message":"..."}
 """
@@ -41,8 +41,8 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[Message]
-    # Uygulamanın seçili arayüz dili ("tr" | "en"). Korpüs Türkçe; İngilizce'de model
-    # Türkçe kaynakları okuyup İngilizce cevap verir (bkz. app/prompt.py).
+    # The app's selected interface language ("tr" | "en"). The corpus is Turkish; in
+    # English the model reads the Turkish sources and answers in English (see app/prompt.py).
     lang: str = "tr"
 
 
@@ -89,15 +89,15 @@ async def _chat_stream(messages: list[Message], lang: str) -> AsyncIterator[str]
         yield _sse({"type": "error", "message": _EMPTY_QUESTION[lang]})
         return
 
-    # Selamlaşma/teşekkür/kısa sohbet mesajlarında retrieval'ı hiç çalıştırma: vektör araması
-    # "en yakın komşu" mantığıyla çalıştığı için "merhaba" gibi mesajlarda bile en yakın
-    # pasajları getirir. Bu, hem alakasız kaynak göstermeyi önler hem yanıtı hızlandırır.
+    # Skip retrieval entirely for greetings/thanks/small talk: vector search works by
+    # nearest neighbour, so it returns the closest passages even for a message like
+    # "merhaba". Skipping avoids showing unrelated sources and speeds up the reply.
     chitchat = is_chitchat(question)
     passages = []
     if not chitchat:
         try:
             passages = await retrieve(question, lang)
-        except Exception as exc:  # retrieval/embedding hatası
+        except Exception as exc:  # retrieval/embedding failure
             yield _sse({"type": "error", "message": f"{_RETRIEVAL_ERROR[lang]}: {exc}"})
             return
 
@@ -108,7 +108,7 @@ async def _chat_stream(messages: list[Message], lang: str) -> AsyncIterator[str]
     } for i, p in enumerate(passages, start=1)]
     yield _sse({"type": "sources", "sources": sources})
 
-    # Geçmiş turları koru, son kullanıcı mesajını kaynaklarla (varsa) zenginleştir.
+    # Keep earlier turns; enrich the last user message with the sources (if any).
     history = [m for m in messages if m.role in ("user", "assistant")]
     llm_messages = [{"role": "system", "content": system_prompt(lang, chitchat)}]
     for m in history[:-1]:
@@ -126,8 +126,9 @@ async def _chat_stream(messages: list[Message], lang: str) -> AsyncIterator[str]
         yield _sse({"type": "error", "message": f"{_MODEL_ERROR[lang]}: {exc}"})
         return
 
-    # Cevabın gerçekten atıf yaptığı kaynak numaraları ([1], [2], ...).
-    # Boşsa cevap kaynağa dayanmıyordur (ör. reddetme) → istemci kaynakları göstermez.
+    # Source numbers the answer actually cites ([1], [2], ...).
+    # If empty the answer is not grounded in a source (e.g. a refusal) -> the client
+    # does not show the sources.
     answer = "".join(answer_parts)
     cited = sorted({int(n) for n in re.findall(r"\[(\d+)\]", answer)
                     if 1 <= int(n) <= len(sources)})
@@ -146,19 +147,19 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
 
 @app.get("/v1/daily/{date}")
 async def daily(date: str, lang: str = "tr", authorization: str | None = Header(default=None)):
-    """Günün ayeti, hadisi ve duası. Sözleşme: DAILY.md.
+    """Verse, hadith and supplication of the day. Contract: DAILY.md.
 
-    Tarih İSTEMCİNİN yerel takvim günüdür ve yolda gelir; sunucu `now()` kullanmaz, çünkü
-    okuyucunun saat dilimini bilemez ve gün onun gece yarısında dönmelidir. Tarih yolda
-    olduğu için cevap önbelleklenebilir.
+    The date is the CLIENT's local calendar day and arrives in the path; the server does
+    not use `now()`, because it cannot know the reader's time zone and the day must turn
+    over at their midnight. With the date in the path the response is cacheable.
 
-    `lang=en` verildiğinde hadis ve dua yalnızca İngilizcesi olan kayıtlar arasından
-    seçilir; havuz yetmiyorsa o kart null döner. Uygulamayı İngilizce kullanan kişiye
-    Türkçe metin göstermek seçenek değil.
+    With `lang=en`, hadith and supplication are picked only from records that have an
+    English text; if the pool is too small that card returns null. Showing Turkish text to
+    someone using the app in English is not an option.
 
-    Derlenemezse 503: uygulama bunu sessizce kendi yerel yoluna düşmek için okur, yani
-    kullanıcıya hata gösterilmez. 404 kullanılmaz - kayıtlı gün yoksa rotasyon devreye
-    girer, "gün yok" diye bir durum yoktur.
+    503 if it cannot be assembled: the app reads this as a cue to silently fall back to its
+    local path, so no error reaches the user. 404 is not used - if a day has no entry the
+    rotation takes over, there is no such thing as "no day".
     """
     _check_auth(authorization)
     try:
@@ -171,6 +172,6 @@ async def daily(date: str, lang: str = "tr", authorization: str | None = Header(
     except DailyUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    # Altı saat: bir tarihin içeriği normalde sabittir, ama küratör bir günü elle
-    # değiştirdiğinde bunun aynı gün yayılması gerekir.
+    # Six hours: a date's content is normally fixed, but when a curator changes a day by
+    # hand the change has to propagate the same day.
     return JSONResponse(payload, headers={"Cache-Control": "public, max-age=21600"})

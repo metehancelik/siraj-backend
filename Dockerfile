@@ -1,20 +1,20 @@
-# Siraj RAG backend - bağımsız imaj (yalnızca kod; veri gömülü DEĞİL).
-# Derleme bağlamı BU dizin (backend/):
-#   cd backend && docker build -t <kullanici>/siraj-backend:latest .
+# Siraj RAG backend - standalone image (code only; data is NOT baked in).
+# The build context is THIS directory (backend/):
+#   cd backend && docker build -t <user>/siraj-backend:latest .
 #
-# Aynı imaj hem API'yi (varsayılan CMD) hem ingest'i çalıştırır. Ingest, JSONL verisini
-# çalışma anında mount edilen /app/data dizininden okur (docker-compose.yml'e bakın).
+# The same image runs both the API (default CMD) and ingest. Ingest reads the JSONL data
+# from /app/data, mounted at runtime (see docker-compose.yml).
 
 FROM python:3.12-slim
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
-# asyncpg/httpx/fastapi manylinux tekerlekleriyle gelir; derleyici gerekmez.
+# asyncpg/httpx/fastapi ship manylinux wheels; no compiler needed.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Uygulama kodu ve şema (veri yok → imaj küçük, kod iterasyonu veriye dokunmaz)
+# App code and schema (no data → small image, code iterations never touch data)
 COPY app /app/app
 COPY ingest /app/ingest
 COPY schema.sql /app/schema.sql

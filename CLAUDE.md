@@ -1,41 +1,38 @@
 # CLAUDE.md
 
-## Kod dili: İngilizce
+## Code language: English
 
-Bu uygulamada **fonksiyon adları kesinlikle İngilizce** olacak. **Yorum satırları
-ve docstring'ler de İngilizce** olacak. İstisna yok.
+In this app **function names must be in English**, without exception. **Comments
+and docstrings are in English** too. No exceptions.
 
-Kapsam kodun kendisidir; değişken, fonksiyon, sınıf ve modül adları ile kod
-içindeki tüm açıklamalar. Bunlar kapsam dışıdır:
+The scope is the code itself: variable, function, class and module names, and every
+explanation inside the code. These are out of scope:
 
-- Kullanıcıya görünen metinler (mağaza notları, arayüz çevirileri, `tr.json`).
-- Bu dosya, `CHANGELOG.md` gibi Türkçe tutulan proje belgeleri.
-- Korpüsten gelen veriler ve dinî terimlerin kendisi (`sirâc`, `tefsir`, `meal`
-  gibi adlar bir kavramın karşılığıysa olduğu gibi kalır).
+- User-facing text (store notes, interface translations, `tr.json`).
+- Project documents kept in Turkish, such as `DAILY.md` and `CHANGELOG.md`.
+- Data from the corpus and religious terms themselves (names such as `sirâc`,
+  `tefsir`, `meal` stay as they are when they stand for a concept).
 
-Not: depoda bu kuraldan önce yazılmış, yorumları Türkçe olan dosyalar var.
-Dokunulan yer İngilizceye çevrilir; toplu dönüşüm ayrı bir iştir.
+## Ingest: always on the local machine, never on the server
 
-## Ingest: her zaman yerel makinede, sunucuda değil
+When asked to "run an ingest", the **default and only method** is this: embeddings are
+produced on the development Mac with `EMBEDDING_MODE=mps` (Apple Silicon GPU), and the
+writes go to the VPS Postgres over an **SSH tunnel**.
 
-"Ingest yap" dendiğinde **varsayılan ve tek yöntem** şudur: embedding'ler
-geliştirme Mac'inde `EMBEDDING_MODE=mps` ile (Apple Silicon GPU) üretilir, yazma
-işlemi VPS Postgres'e bir **SSH tüneli** üzerinden yapılır.
+Do not offer to run the ingest on the server. The VPS has no GPU; a CPU-only embed takes
+hours. The `docker compose --profile ingest` flow in the README describes the server
+side and **does not apply** to this project.
 
-Sunucuda ingest çalıştırma seçeneği sunma. VPS'te GPU yok; CPU-only embed
-saatler sürüyor. README'deki `docker compose --profile ingest` akışı sunucu
-tarafını anlatır ve bu proje için **geçerli değildir**.
+### Flow
 
-### Akış
+1. **Connect to the server:** `ssh root@49.13.156.121` (Coolify setup). The same access
+   also exists as the `ravey` alias in `~/.zshrc`, but the alias does not resolve in a
+   non-interactive shell, so always write the command out in full.
 
-1. **Sunucuya bağlan:** `ssh root@49.13.156.121` (Coolify kurulumu). Aynı erişim
-   `~/.zshrc`'de `ravey` alias'ı olarak da var, ama alias etkileşimsiz kabukta
-   çözülmediği için komutu her zaman açık yaz.
-
-2. **Tüneli DB container'ının IP'sine kur, host'un yayınlanan portuna DEĞİL.**
-   `127.0.0.1:5432`'ye (docker-proxy) kurulan tünelde bağlantılar rastgele
-   "Connection reset by peer" ile düşüyor; Postgres log'unda hata olmuyor.
-   Container IP'si ile sorun yok:
+2. **Point the tunnel at the DB container's IP, NOT the host's published port.**
+   On a tunnel to `127.0.0.1:5432` (docker-proxy), connections randomly drop with
+   "Connection reset by peer" and nothing shows up in the Postgres log. The container
+   IP works fine:
 
    ```bash
    DBIP=$(ssh root@49.13.156.121 'docker inspect db-aoqjjh7jto93og1mpi2ncsvi \
@@ -44,37 +41,38 @@ tarafını anlatır ve bu proje için **geçerli değildir**.
      -L 5433:$DBIP:5432 root@49.13.156.121
    ```
 
-3. **`.env`'i tünele yönlendir.** DB parolası container ortamında
-   `POSTGRES_PASSWORD`. Parolayı ekrana düşürmeden yazmak için:
+3. **Point `.env` at the tunnel.** The DB password is `POSTGRES_PASSWORD` in the
+   container environment. To write it without printing the password:
 
    ```bash
    ssh root@49.13.156.121 'docker exec db-aoqjjh7jto93og1mpi2ncsvi printenv POSTGRES_PASSWORD' \
      | awk '{print "DATABASE_URL=postgresql://siraj:"$1"@localhost:5433/siraj"}' > .env
    ```
 
-4. **Ingest'ten önce iki doğrulamayı yap - atlanamaz:**
-   - Tünelden `SELECT count(*) FROM chunks` beklenen büyüklüğü dönmeli. `0`
-     dönüyorsa tünel yanlış yere gidiyordur ve Mac'te boş bir korpüs kurulur.
-   - Yerel MPS vektörleri korpüsle aynı uzayda mı: DB'den bir chunk'ın
-     `content`'ini yeniden embed edip saklı `embedding` ile kosinüs benzerliğine
-     bak - `1.000000` çıkmalı. Uzak embedding servisine sorma, `.env`'de anahtar
-     yok (401 döner).
+4. **Run two checks before the ingest - they cannot be skipped:**
+   - `SELECT count(*) FROM chunks` over the tunnel must return the expected size. If it
+     returns `0`, the tunnel points to the wrong place and an empty corpus gets built
+     on the Mac.
+   - Are the local MPS vectors in the same space as the corpus: re-embed one chunk's
+     `content` from the DB and compare it with the stored `embedding` by cosine
+     similarity - it must be `1.000000`. Do not ask the remote embedding service; there
+     is no key in `.env` (it returns 401).
 
-5. **Çalıştır:**
+5. **Run:**
 
    ```bash
-   python -m ingest.ingest --data-dir ../data                 # hepsi
-   python -m ingest.ingest --data-dir ../data --source fetva --limit 50   # deneme
-   python -m ingest.check_retrieval                           # sonrasında kontrol
+   python -m ingest.ingest --data-dir ../data                 # everything
+   python -m ingest.ingest --data-dir ../data --source fetva --limit 50   # trial run
+   python -m ingest.check_retrieval                           # check afterwards
    ```
 
-### Ingest kod değişikliğini yayına almaz
+### Ingest does not ship code changes
 
-Ingest yalnızca veriyi yazar. Etiketler, promptlar ve retrieval kodu imajın
-içindedir; değiştiyseler ayrıca deploy gerekir:
+Ingest only writes data. Labels, prompts and retrieval code live inside the image; if
+they changed, a separate deploy is needed:
 
 ```bash
 docker buildx build --platform linux/amd64 -t metehancelik/siraj-backend:latest --push .
 ```
 
-sonra Coolify'dan redeploy. Redeploy yayınlanan portu değiştirebiliyor.
+then redeploy from Coolify. A redeploy can change the published port.

@@ -1,40 +1,41 @@
 # Siraj RAG Backend
 
-Güvenilir dinî kaynaklardan (Diyanet meal/tefsir/hadis/fetva, TDV İslâm Ansiklopedisi,
-Risale-i Nur Külliyatı) toplanan veriyle çalışan, mobil sohbet için **kaynağa dayalı (RAG)**
-backend. Kendi `gemma-4-12b` modelinize (OpenAI-uyumlu endpoint) bağlanır, cevapları
-yalnızca getirilen metinlere dayandırır ve her cevaba tıklanabilir kaynak listesi ekler.
+A **source-grounded (RAG)** backend for mobile chat, built on data collected from trusted religious
+sources (Diyanet meal/tefsir/hadis/fetva, TDV İslâm Ansiklopedisi, Risale-i Nur Külliyatı).
+It connects to your own `gemma-4-12b` model (OpenAI-compatible endpoint), bases its answers
+only on the retrieved texts, and attaches a clickable list of sources to every answer.
 
 ```
-Mobil uygulama ──POST /v1/chat (SSE)──▶ Backend ──┬─▶ TEI (bge-m3)  → soruyu embed'le
-                                                   ├─▶ Postgres/pgvector → hibrit arama
-                                                   └─▶ gemma-4-12b  → akışlı cevap
+Mobile app ──POST /v1/chat (SSE)──▶ Backend ──┬─▶ TEI (bge-m3)  → embed the question
+                                               ├─▶ Postgres/pgvector → hybrid search
+                                               └─▶ gemma-4-12b  → streamed answer
 ```
 
-LLM anahtarı **sadece backend'de** durur; mobil uygulama modele doğrudan erişmez.
+The LLM key lives **only on the backend**; the mobile app never talks to the model directly.
 
 ---
 
-## ⚠️ CPU-only sunucu: 12B yerine küçük model şart
+## ⚠️ CPU-only server: a small model is required instead of 12B
 
-Mevcut `gemma-4-12b` ölçüldü - CPU'da mobil sohbet için kullanılamaz:
+The current `gemma-4-12b` was measured and is unusable for mobile chat on CPU:
 
-| | Üretim | Prompt işleme | ~120 kelimelik cevap |
+| | Generation | Prompt processing | ~120-word answer |
 |---|---|---|---|
-| gemma-4-12b (CPU) | **~1.9 token/sn** | ~20 token/sn | **1.5–2.5 dakika** |
+| gemma-4-12b (CPU) | **~1.9 tokens/s** | ~20 tokens/s | **1.5–2.5 minutes** |
 
-RAG'de getirilen bağlam her soruda değiştiği için prompt işleme cache'lenmez; hiçbir ayar
-12B'yi CPU'da kabul edilebilir yapmaz.
+In RAG the retrieved context changes with every question, so prompt processing is not cached;
+no setting makes 12B acceptable on CPU.
 
-**Çözüm: sohbet modelini küçültün.** RAG bunu güvenli kılar - modelin işi artık bilgiyi
-*hatırlamak* değil, önüne konan Diyanet metnini Türkçe özetleyip kaynak göstermek ve metinde
-yoksa reddetmek. Bu görevi 3–4B'lik bir model de yapar; zor bilgi getirilen bağlamda durur.
+**Solution: use a smaller chat model.** RAG makes this safe: the model's job is no longer to
+*remember* facts, but to summarize the Diyanet text placed in front of it in Turkish, cite the
+source, and refuse if the text doesn't cover it. A 3-4B model can do that; the hard knowledge
+sits in the retrieved context.
 
-Öneri (CPU'da llama.cpp ile, hızlıdan kaliteliye):
-1. **Gemma 3 4B Instruct (Q4_K_M)** - tanıdık aile, iyi Türkçe, güçlü talimat takibi. İlk bunu deneyin.
-2. **Qwen2.5-7B-Instruct (Q4_K_M)** - 4B kalitesi ince gelirse; ~1.5× daha yavaş ama daha isabetli.
+Recommendations (on CPU with llama.cpp, from fastest to highest quality):
+1. **Gemma 3 4B Instruct (Q4_K_M)** - familiar family, good Turkish, strong instruction following. Try this first.
+2. **Qwen2.5-7B-Instruct (Q4_K_M)** - if 4B quality feels thin; ~1.5× slower but more accurate.
 
-Aynı `timings` ölçümünü yeni modelde tekrarlayıp karar verin:
+Repeat the same `timings` measurement on the new model and decide:
 ```bash
 curl -N -s <endpoint>/v1/chat/completions -H "Authorization: Bearer <key>" \
   -H "Content-Type: application/json" \
@@ -43,168 +44,169 @@ curl -N -s <endpoint>/v1/chat/completions -H "Authorization: Bearer <key>" \
   | grep -o '"timings":{[^}]*}' | tail -1
 ```
 
-### CPU'da llama.cpp ayarları (önemli)
-- `--threads N` : N = **fiziksel** çekirdek sayısı (hyperthread değil).
-- `--ctx-size 4096` : bağlam küçük tutulduğu için 4096 yeter; küçük ctx daha az bellek/daha hızlı.
-- `-b 512 -ub 512` : prompt işleme verimini artırır.
-- Derleme AVX2 (varsa AVX-512) kullanmalı; `-march=native` ile derlenmiş binary büyük fark yaratır.
-- Sistem promptu sabit ve en başta (backend zaten böyle yapıyor) → llama.cpp bu öneki cache'ler.
+### llama.cpp settings on CPU (important)
+- `--threads N` : N = number of **physical** cores (not hyperthreads).
+- `--ctx-size 4096` : since the context is kept small, 4096 is enough; a smaller ctx means less memory and more speed.
+- `-b 512 -ub 512` : improves prompt processing throughput.
+- The build should use AVX2 (AVX-512 if available); a binary compiled with `-march=native` makes a big difference.
+- Keep the system prompt fixed and at the very start (the backend already does this) → llama.cpp caches that prefix.
 
-### Gerçekçi beklenti
-Küçültülmüş bağlam (`TOP_K=3`, `MAX_CHUNK_CHARS=550`, `LLM_MAX_TOKENS=320`) + 4B model ile
-CPU'da soru başına kabaca **~15–45 saniye** (çekirdek sayısı ve bellek bant genişliğine bağlı).
-Anlık sohbet olmaz; "düşünüp kaynaklı cevap veren arkadaş" deneyimidir. Mobil taraf bunu
-yumuşatır: kaynaklar üretimden önce anında gösterilir, cevap token token akar, "cevap
-hazırlanıyor" göstergesi bekleyişi taşır. Hız kritikse, kiralık küçük bir GPU (L4/A10) aynı
-işi 2–4 saniyeye indirir - ama backend her iki durumda da aynı, sadece `LLM_BASE_URL` değişir.
+### Realistic expectations
+With the reduced context (`TOP_K=3`, `MAX_CHUNK_CHARS=550`, `LLM_MAX_TOKENS=320`) and a 4B model,
+expect roughly **~15–45 seconds** per question on CPU (depending on core count and memory bandwidth).
+It won't be instant chat; it's more like "a friend who thinks it over and answers with sources". The
+mobile side smooths this out: sources are shown immediately before generation, the answer streams
+token by token, and a "preparing answer" indicator carries the wait. If speed is critical, a small
+rented GPU (L4/A10) brings the same work down to 2–4 seconds - but the backend is the same either way,
+only `LLM_BASE_URL` changes.
 
 ---
 
-## Docker + Coolify dağıtımı (önerilen)
+## Docker + Coolify deployment (recommended)
 
-Tek imaj hem API'yi hem ingest'i çalıştırır. İmaj **yalnızca koddur** (küçük); JSONL verisi
-imaja gömülü değildir, ingest sırasında bir dizin olarak mount edilir. Bu sayede backend
-kendi başına bir GitHub reposu olabilir (veri/crawler ayrı durur). Yanına TEI (bge-m3) ve
-pgvector Postgres `docker-compose.yml` ile bağlanır. Şema, backend ilk açılışta otomatik uygulanır.
+A single image runs both the API and the ingest. The image is **code only** (small); the JSONL data
+is not baked into the image but mounted as a directory during ingest. This lets the backend live in
+its own GitHub repo (data/crawler stay separate). TEI (bge-m3) and pgvector Postgres are wired up
+alongside it via `docker-compose.yml`. The schema is applied automatically on the backend's first start.
 
-> **Not (mimari):** TEI'nin CPU imajı yalnızca **amd64**'tür; tipik x86_64 sunucuda
-> (Coolify dahil) sorun yok, ancak Apple Silicon Mac'te yerelde çalışmaz. pgvector ve
-> backend çok-mimarilidir.
+> **Note (architecture):** TEI's CPU image is **amd64** only; that's fine on a typical x86_64 server
+> (Coolify included), but it won't run locally on an Apple Silicon Mac. pgvector and the
+> backend are multi-arch.
 >
-> **Not (Postgres eklentileri):** Şema `vector` ve `unaccent` eklentilerini ister
-> (Türkçe aramada "zekat" ↔ "Zekât" eşleşmesi için `unaccent` şart). Resmi/pgvector
-> Postgres imajları ikisini de içerir. Yönetilen bir Postgres kullanıyorsanız bu
-> eklentilerin açık olduğundan emin olun.
+> **Note (Postgres extensions):** The schema requires the `vector` and `unaccent` extensions
+> (`unaccent` is needed so Turkish search matches "zekat" ↔ "Zekât"). The official/pgvector
+> Postgres images include both. If you use a managed Postgres, make sure these
+> extensions are enabled.
 
-### 1) İki imajı derleyip Docker Hub'a gönderin
+### 1) Build both images and push them to Docker Hub
 
-Bu dizinden, iyi internetli makinenizde (sunucu amd64):
+From this directory, on a machine with good internet (the server is amd64):
 
 ```bash
 cd siraj-backend
 docker login
 
-# a) Backend (kod-only, küçük):
+# a) Backend (code only, small):
 docker buildx build --platform linux/amd64 \
   -t metehancelik/siraj-backend:latest --push .
 
-# b) Embeddings (bge-m3 modeli GÖMÜLÜ TEI imajı, ~3.85GB):
+# b) Embeddings (TEI image with the bge-m3 model BAKED IN, ~3.85GB):
 docker buildx build --platform linux/amd64 -f Dockerfile.embeddings \
   -t metehancelik/siraj-embeddings:latest --push .
 ```
 
-> Neden gömülü embeddings imajı? Sunucudaki bozuk proxy env'i, standart TEI'nin çalışma
-> anında HuggingFace'ten model indirmesini engelliyordu ("relative URL without a base").
-> Model imaja gömülü olduğu için TEI hiç indirme yapmaz → sorun ortadan kalkar. Ayrıca
-> TEI'nin CPU imajı ONNX kullanır (safetensors değil), o yüzden bge-m3'ün onnx ağırlıkları gömülür.
+> Why a baked-in embeddings image? A broken proxy env on the server prevented standard TEI from
+> downloading the model from HuggingFace at runtime ("relative URL without a base").
+> Since the model is baked into the image, TEI never downloads anything → the problem goes away. Also,
+> TEI's CPU image uses ONNX (not safetensors), so bge-m3's onnx weights are the ones baked in.
 
-### 2) Coolify'da compose ile çalıştırın
+### 2) Run it with compose on Coolify
 
-`backend/docker-compose.yml`'i Coolify'a "Docker Compose" kaynağı olarak verin ve ortam
-değişkenlerini girin:
+Give `backend/docker-compose.yml` to Coolify as a "Docker Compose" resource and enter the
+environment variables:
 
-| Değişken | Örnek |
+| Variable | Example |
 |---|---|
 | `SIRAJ_IMAGE` | `metehancelik/siraj-backend:latest` |
-| `POSTGRES_PASSWORD` | güçlü bir parola |
-| `LLM_BASE_URL` | `http://<llama-cpp-host>:8080/v1` (kendi modeliniz) |
-| `LLM_API_KEY` | anahtarınız (yoksa boş) |
-| `LLM_MODEL` | `gemma-3-4b-it` (CPU önerisi) |
-| `API_TOKEN` | mobil uygulamanın göndereceği Bearer (boş = kimlik doğrulama kapalı) |
+| `POSTGRES_PASSWORD` | a strong password |
+| `LLM_BASE_URL` | `http://<llama-cpp-host>:8080/v1` (your own model) |
+| `LLM_API_KEY` | your key (empty if none) |
+| `LLM_MODEL` | `gemma-3-4b-it` (CPU recommendation) |
+| `API_TOKEN` | Bearer token the mobile app sends (empty = authentication disabled) |
 
-Deploy edince: `backend` (:8000), `embeddings` (TEI - model gömülü, indirme yok, hemen "Ready")
-ve `db` (pgvector) ayağa kalkar. Backend şemayı otomatik uygular. Coolify'da 8000'i bir
-domain'e bağlayın (reverse proxy SSE için buffering'i kapatmalı - aşağıdaki nginx notu).
+On deploy, `backend` (:8000), `embeddings` (TEI - model baked in, no download, "Ready" right away)
+and `db` (pgvector) come up. The backend applies the schema automatically. In Coolify, bind 8000 to a
+domain (the reverse proxy must disable buffering for SSE - see the nginx note below).
 
-`POSTGRES_PASSWORD` **boş olamaz** (boşsa pgvector başlamaz, backend "connection refused" alır).
+`POSTGRES_PASSWORD` **cannot be empty** (if it is, pgvector won't start and the backend gets "connection refused").
 
-### 3) Ingest'i sonra başlatma
+### 3) Starting the ingest afterwards
 
-Veri imajda olmadığı için önce JSONL'i sunucuya kopyalayın (bir kez):
+Since the data isn't in the image, first copy the JSONL to the server (once):
 
 ```bash
-# Kendi makinenizden (crawler çıktısı ~/Desktop/siraj-crawler/data içinde):
+# From your own machine (crawler output is in ~/Desktop/siraj-crawler/data):
 scp data/*.jsonl kullanici@sunucu:/opt/siraj/data/
 ```
 
-Sonra compose'un olduğu yerde `DATA_DIR`'i o dizine ayarlayıp ingest'i tek seferlik iş
-olarak çalıştırın (compose bu dizini `/app/data` olarak bağlar):
+Then, where the compose file lives, point `DATA_DIR` at that directory and run the ingest as a
+one-off job (compose mounts this directory as `/app/data`):
 
 ```bash
 DATA_DIR=/opt/siraj/data docker compose --profile ingest run --rm ingest
-# Uzun sürecekse ayrılabilir çalıştırın:
+# If it will take long, run it detached:
 DATA_DIR=/opt/siraj/data docker compose --profile ingest up -d ingest
 docker compose logs -f ingest
 ```
 
-~235.000 chunk'ı bge-m3 ile embed'leyip pgvector'e yükler (CPU'da TEI ile bir gecelik iş;
-tekrar çalıştırılabilir, ON CONFLICT ile günceller). Bitince getirimi kontrol edin:
+It embeds ~235,000 chunks with bge-m3 and loads them into pgvector (an overnight job on CPU with TEI;
+it can be re-run, ON CONFLICT updates existing rows). When it finishes, check retrieval:
 
 ```bash
 docker compose exec backend python -m ingest.check_retrieval
 ```
 
-Örnek soruların ilk pasajları konuyla ilgiliyse sohbet hazırdır.
+If the top passages for the sample questions are on topic, chat is ready.
 
 ---
 
-## Manuel kurulum (Docker'sız, VPS'te)
+## Manual setup (without Docker, on a VPS)
 
-Ingest için Postgres + embedding servisi + JSONL verisi aynı yerde olmalı. En basit
-topoloji: her şeyi VPS'e koyun, `data/*.jsonl` dosyalarını oraya kopyalayın.
+For ingest, Postgres + the embedding service + the JSONL data must be in the same place. The simplest
+topology: put everything on the VPS and copy the `data/*.jsonl` files there.
 
-### 1) Embedding modeli: **BAAI/bge-m3** (kurulum ve erişim)
+### 1) Embedding model: **BAAI/bge-m3** (setup and access)
 
-`bge-m3` seçildi çünkü Türkçe + Arapça karışık dini metinde en güçlü çok-dilli embedding'lerden
-biri (1024 boyut, 8192 bağlam, önek gerektirmez).
+`bge-m3` was chosen because it is one of the strongest multilingual embeddings for mixed Turkish +
+Arabic religious text (1024 dimensions, 8192 context, no prefix required).
 
-**Önce kavram:** LiteLLM model *çalıştırmaz*, sadece *yönlendirir*. gemma'nız da aslında
-LiteLLM'in arkasında bir sunucuda koşuyor. bge-m3 için de bir çalıştırıcı gerekir - en uygunu
-**HF Text Embeddings Inference (TEI)**. TEI'yi çalıştırıp backend'e iki şekilde eriştirebilirsiniz.
+**The concept first:** LiteLLM doesn't *run* models, it only *routes* to them. Your gemma also actually
+runs on a server behind LiteLLM. bge-m3 needs a runner too - the best fit is
+**HF Text Embeddings Inference (TEI)**. Once TEI is running, the backend can reach it in two ways.
 
-**TEI'yi çalıştırın** (bge-m3, ~2.3GB RAM; ilk açılışta modeli indirir):
+**Run TEI** (bge-m3, ~2.3GB RAM; downloads the model on first start):
 ```bash
-# CPU (sunucunuz CPU olduğu için; imaj amd64):
+# CPU (since your server is CPU; the image is amd64):
 docker run -d --name tei -p 8080:80 -v $PWD/tei-data:/data \
   ghcr.io/huggingface/text-embeddings-inference:cpu-1.5 --model-id BAAI/bge-m3
-# GPU olsaydı: --gpus all + imaj ':1.5'
+# With a GPU: --gpus all + image ':1.5'
 ```
-> `docker-compose.yml` kullanıyorsanız `embeddings` servisi bunu zaten yapar; ayrıca çalıştırmayın.
+> If you use `docker-compose.yml`, the `embeddings` service already does this; don't run it separately.
 
-**Erişim - iki yol:**
+**Access - two options:**
 
-| | Nasıl | Ne zaman |
+| | How | When |
 |---|---|---|
-| **A. Doğrudan TEI** | `.env`: `EMBEDDING_MODE=tei`, `EMBEDDING_URL=http://embeddings:80` | En basit ve en hızlı. Backend TEI'ye compose ağı üzerinden özel erişir; dışarı açmanıza gerek yok. **Ingest için ideal** (LiteLLM hop'u yok). Compose varsayılanı budur. |
-| **B. LiteLLM üzerinden** | TEI'yi LiteLLM'e kaydedin, `.env`: `EMBEDDING_MODE=openai`, `EMBEDDING_BASE_URL=<litellm>/v1`, `EMBEDDING_MODEL=bge-m3`, `EMBEDDING_API_KEY=<anahtar>` | bge-m3'ü gemma ile **aynı kapı ve anahtardan** erişmek, tek yerden loglama/limit istiyorsanız. |
+| **A. Direct TEI** | `.env`: `EMBEDDING_MODE=tei`, `EMBEDDING_URL=http://embeddings:80` | Simplest and fastest. The backend reaches TEI privately over the compose network; no need to expose it. **Ideal for ingest** (no LiteLLM hop). This is the compose default. |
+| **B. Via LiteLLM** | Register TEI in LiteLLM, `.env`: `EMBEDDING_MODE=openai`, `EMBEDDING_BASE_URL=<litellm>/v1`, `EMBEDDING_MODEL=bge-m3`, `EMBEDDING_API_KEY=<anahtar>` | If you want to reach bge-m3 through the **same gateway and key** as gemma, with logging/limits in one place. |
 
-**B için LiteLLM `config.yaml`'a ekleme** (TEI OpenAI-uyumlu `/v1/embeddings` sunar):
+**For B, add to LiteLLM's `config.yaml`** (TEI serves an OpenAI-compatible `/v1/embeddings`):
 ```yaml
 model_list:
   - model_name: bge-m3
     litellm_params:
       model: openai/bge-m3
-      api_base: http://TEI_HOST:8080/v1   # TEI'nin çalıştığı adres
+      api_base: http://TEI_HOST:8080/v1   # address where TEI runs
       api_key: "none"
 ```
-Kaydedip LiteLLM'i yeniden başlatın; artık `POST <litellm>/v1/embeddings` (model: `bge-m3`,
-mevcut Bearer anahtarınız) çalışır.
+Save and restart LiteLLM; `POST <litellm>/v1/embeddings` (model: `bge-m3`,
+your existing Bearer key) now works.
 
-> Öneri: Sorgu anındaki tek embedding için B (birleşik kapı) hoş; ama **ingest 235.000 çağrı
-> yapar** - orada A (doğrudan TEI) hem daha hızlı hem LiteLLM loglarını şişirmez. İkisini
-> karıştırabilirsiniz: ingest'i `EMBEDDING_MODE=tei` ile, backend'i `openai` ile çalıştırın.
+> Recommendation: for the single embedding at query time, B (unified gateway) is nice; but **ingest makes
+> 235,000 calls** - there A (direct TEI) is faster and doesn't bloat the LiteLLM logs. You can
+> mix them: run the ingest with `EMBEDDING_MODE=tei` and the backend with `openai`.
 
-> Alternatif model: `intfloat/multilingual-e5-large` (1024 boyut). Kullanırsanız `.env`'de
-> `EMBEDDING_USE_E5_PREFIX=true` yapın - e5 `query:`/`passage:` önekleri ister, bge-m3 istemez.
+> Alternative model: `intfloat/multilingual-e5-large` (1024 dimensions). If you use it, set
+> `EMBEDDING_USE_E5_PREFIX=true` in `.env` - e5 requires `query:`/`passage:` prefixes, bge-m3 does not.
 
 ### 2) Postgres + pgvector
 
-Mevcut Postgres'inizi kullanabilirsiniz.
+You can use your existing Postgres.
 
 ```bash
-# pgvector eklentisi (Debian/Ubuntu, PG 16 örneği):
+# pgvector extension (Debian/Ubuntu, PG 16 example):
 sudo apt install postgresql-16-pgvector
-# Şema:
+# Schema:
 psql "$DATABASE_URL" -f schema.sql
 ```
 
@@ -214,84 +216,85 @@ psql "$DATABASE_URL" -f schema.sql
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # DATABASE_URL, EMBEDDING_URL, LLM_* değerlerini doldurun
+cp .env.example .env        # fill in DATABASE_URL, EMBEDDING_URL, LLM_* values
 ```
 
-### 4) Veriyi yükle (ingest)
+### 4) Load the data (ingest)
 
 ```bash
-# Önce küçük bir denemeyle boru hattını doğrulayın:
+# First validate the pipeline with a small trial run:
 python -m ingest.ingest --data-dir ../data --source fetva --limit 50
 
-# Tümü (~235.000 chunk; embedding hızına bağlı olarak GPU'da ~30-60 dk, CPU'da saatler):
+# Everything (~235,000 chunks; depending on embedding speed ~30-60 min on GPU, hours on CPU):
 python -m ingest.ingest --data-dir ../data
 ```
 
-Bölümleme kaynağa göre yapılır: fetva bütün (Soru/Cevap), meal ayet ayet, tefsir/hadis/dia/
-risale ~300 token'lık pencerelere bölünür (dia'nın şablon başlık/dipnotu ve sekmeleri
-temizlenir; risale pencerelerinin başına bölümün külliyat içindeki yolu yazılır).
+Chunking depends on the source: fetva stays whole (question/answer), meal is split verse by verse,
+tefsir/hadis/dia/risale are split into ~300-token windows (dia's boilerplate header/footnote and tabs
+are stripped; each risale window is prefixed with the section's path within the Külliyat).
 
-### 5) Getirim kalitesini kontrol edin (LLM'e geçmeden)
+### 5) Check retrieval quality (before moving on to the LLM)
 
 ```bash
 python -m ingest.check_retrieval
 ```
 
-Örnek soruların ilk pasajları konuyla ilgiliyse devam edin. "Bugünün duası nedir?" bir
-uygulama-durumu sorusudur; alakasız gelmesi/boş kalması normaldir - sohbet bunu nazikçe
-reddeder.
+If the top passages for the sample questions are on topic, continue. "Bugünün duası nedir?"
+("What is today's prayer?") is an app-state question; it's normal for it to come back irrelevant or
+empty - chat politely declines it.
 
-### 6) Sunucuyu başlat
+### 6) Start the server
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000
-# systemd/pm2 ile kalıcılaştırın; TLS için nginx arkasına alın (SSE için buffering kapalı).
+# Make it persistent with systemd/pm2; put it behind nginx for TLS (buffering off for SSE).
 ```
 
-Sağlık kontrolü: `curl localhost:8000/health` → `{"status":"ok","chunks": N}`
+Health check: `curl localhost:8000/health` → `{"status":"ok","chunks": N}`
 
 ---
 
 ## API
 
-`POST /v1/chat` - `Authorization: Bearer <API_TOKEN>` (ayarlanmışsa)
+`POST /v1/chat` - `Authorization: Bearer <API_TOKEN>` (if set)
 
 ```json
 { "messages": [ {"role":"user","content":"Namaz nasıl kılınır?"} ] }
 ```
 
-Yanıt `text/event-stream`, her satır `data: {json}`:
+The response is `text/event-stream`, each line `data: {json}`:
 
-| type | alanlar | anlamı |
+| type | fields | meaning |
 |---|---|---|
-| `sources` | `sources:[{n,source,label,title,url}]` | getirilen kaynaklar (üretimden önce, bir kez) |
+| `sources` | `sources:[{n,source,label,title,url}]` | retrieved sources (once, before generation) |
 
-İstek gövdesi `{"messages":[...], "lang":"tr"|"en"}`. Korpüs tamamen Türkçe; `lang=en`
-geldiğinde soru önce Türkçeye çevrilip öyle aranır, model kaynakları Türkçe okuyup cevabı
-İngilizce yazar (kaynak etiketleri de İngilizceye çevrilir, başlıklar Türkçe kalır).
+The request body is `{"messages":[...], "lang":"tr"|"en"}`. The corpus is entirely Turkish; when
+`lang=en` arrives, the question is first translated into Turkish and searched that way, and the model
+reads the sources in Turkish and writes the answer in English (source labels are translated into
+English too, titles stay Turkish).
 
-Çeviri neden gerekli: İngilizce sorguyu doğrudan aratmak ölçüldüğünde çalışmadı - alaka
-eşiği (`retrieval_max_distance`) çapraz-dilli mesafelerde ayırt etmiyor ("What is the capital
-of France?" 0.31 alıp gerçek sorulardan yakın çıktı) ve `tsv` kolonu `to_tsvector('turkish')`
-olduğu için tam-metin araması hiç devreye girmiyor. Türkçeye çevrilince ikisi de ölçülüp
-ayarlanmış haliyle çalışır. Bedeli soru başına ~3-3,5 sn (tekrar eden sorular önbellekten).
-| `delta` | `text` | üretilen metin parçası (çok kez) |
-| `done` | - | tamamlandı |
-| `error` | `message` | hata |
+Why translation is needed: searching the English query directly was measured and didn't work - the
+relevance threshold (`retrieval_max_distance`) doesn't discriminate at cross-lingual distances ("What
+is the capital of France?" scored 0.31, closer than real questions), and since the `tsv` column is
+`to_tsvector('turkish')`, full-text search never kicks in. Once translated into Turkish, both work as
+measured and tuned. The cost is ~3-3.5 s per question (repeated questions come from the cache).
+| `delta` | `text` | a chunk of generated text (many times) |
+| `done` | - | finished |
+| `error` | `message` | error |
 
-Mobil taraf `siraj/src/services/chatService.ts` içinde bu protokolü XHR ile akıtarak okur.
+The mobile side reads this protocol by streaming it over XHR in `siraj/src/services/chatService.ts`.
 
-## Ayarlar (`.env`)
+## Settings (`.env`)
 
-Yavaş donanımda gecikmeyi düşürmek için: `TOP_K` (4→3), `MAX_CHUNK_CHARS` (900→500),
-`LLM_MAX_TOKENS` (512→256). Tümü `.env.example` içinde açıklanmıştır.
+To lower latency on slow hardware: `TOP_K` (4→3), `MAX_CHUNK_CHARS` (900→500),
+`LLM_MAX_TOKENS` (512→256). All are documented in `.env.example`.
 
-## Nginx notu (SSE)
+## Nginx note (SSE)
 
 ```nginx
 location /v1/chat {
     proxy_pass http://127.0.0.1:8000;
-    proxy_buffering off;          # akışın anında geçmesi için şart
+    proxy_buffering off;          # required so the stream passes through immediately
     proxy_read_timeout 600s;
 }
 ```

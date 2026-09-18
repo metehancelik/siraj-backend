@@ -1,13 +1,14 @@
-"""bge-m3 embedding istemcisi. Üç erişim modu:
+"""bge-m3 embedding client. Three access modes:
 
-- mode="openai": OpenAI-uyumlu /embeddings ucu (LiteLLM üzerinden veya TEI'nin /v1'i).
-  Mevcut LiteLLM gateway'inize bge-m3'ü kaydedip aynı anahtarla erişmek için bunu kullanın.
-- mode="tei":    HF Text Embeddings Inference'ın yerel /embed ucu (doğrudan, en hızlı).
-- mode="mps":    sentence-transformers ile yerel Apple Silicon GPU. Sadece tek seferlik
-  lokal ingest içindir (örn. uzak Postgres'e SSH tüneliyle yazarken); üretimde kullanılmaz.
-  Aynı bge-m3 ağırlıkları + aynı pooling config -> TEI ile ölçülmüş kosinüs benzerliği 1.0.
+- mode="openai": OpenAI-compatible /embeddings endpoint (via LiteLLM or TEI's /v1).
+  Use this to register bge-m3 on your existing LiteLLM gateway and reach it with the same key.
+- mode="tei":    the native /embed endpoint of HF Text Embeddings Inference (direct, fastest).
+- mode="mps":    local Apple Silicon GPU via sentence-transformers. Only for a one-off
+  local ingest (e.g. writing to a remote Postgres over an SSH tunnel); never used in
+  production. Same bge-m3 weights + same pooling config -> measured cosine similarity
+  of 1.0 against TEI.
 
-bge-m3 önek istemez. multilingual-e5-large'a geçilirse query/passage önekleri gerekir.
+bge-m3 needs no prefix. Switching to multilingual-e5-large requires query/passage prefixes.
 """
 import asyncio
 
@@ -42,7 +43,7 @@ async def _embed_openai(texts: list[str], client: httpx.AsyncClient) -> list[lis
     resp = await client.post(url, headers=headers, json=payload)
     resp.raise_for_status()
     data = resp.json()["data"]
-    # index'e göre sırala (bazı sağlayıcılar sırayı garanti etmez)
+    # sort by index (some providers do not guarantee order)
     data.sort(key=lambda d: d["index"])
     return [d["embedding"] for d in data]
 
@@ -56,8 +57,8 @@ async def _embed_tei(texts: list[str], client: httpx.AsyncClient) -> list[list[f
 
 def _encode_local(texts: list[str]) -> list[list[float]]:
     model = _get_local_model()
-    # batch_size=1: uzun metinler (dia/fetva) tek batch'te karışınca dev padding
-    # -> attention belleği patlıyor (ölçüldü: 30GB+ OOM). Tek tek işlemek güvenli.
+    # batch_size=1: mixing long texts (dia/fetva) in one batch causes huge padding
+    # -> attention memory blows up (measured: 30GB+ OOM). One at a time is safe.
     vecs = model.encode(texts, batch_size=1, normalize_embeddings=False,
                         show_progress_bar=False)
     return vecs.tolist()
@@ -69,13 +70,13 @@ async def _embed_mps(texts: list[str]) -> list[list[float]]:
 
 async def embed(texts: list[str], kind: str = "passage",
                 client: httpx.AsyncClient | None = None) -> list[list[float]]:
-    """kind: 'query' (arama sorgusu) veya 'passage' (indekslenecek metin)."""
+    """kind: 'query' (search query) or 'passage' (text to be indexed)."""
     texts = _prefix(texts, kind)
     if settings.embedding_mode == "mps":
         return await _embed_mps(texts)
     own = client is None
-    # trust_env=False: ortama enjekte edilmiş bozuk *_PROXY değişkenlerini yok say
-    # (embeddings servisine dahili ağdan erişilir, proxy'ye gerek yok).
+    # trust_env=False: ignore broken *_PROXY variables injected into the environment
+    # (the embeddings service is reached over the internal network, no proxy needed).
     client = client or httpx.AsyncClient(timeout=120, trust_env=False)
     try:
         if settings.embedding_mode == "tei":

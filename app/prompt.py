@@ -1,11 +1,12 @@
-"""Kaynağa dayalı (grounded) prompt kurgusu - Türkçe ve İngilizce.
+"""Grounded prompt construction - Turkish and English.
 
-Önemli: DEĞİŞMEYEN sistem talimatı en başta durur; llama.cpp bu öneki cache'ler.
-Getirilen kaynaklar (her soruda değişen kısım) sonra, kullanıcı mesajında gelir.
+Important: the UNCHANGING system instruction comes first; llama.cpp caches this prefix.
+The retrieved sources (the part that changes with every question) come after, in the
+user message.
 
-Korpüs tamamen Türkçe. bge-m3 çapraz-dilli olduğu için İngilizce bir soru da Türkçe
-pasajları getirir; bu durumda modele kaynakların Türkçe olduğunu ve cevabı İngilizce
-vermesi gerektiğini açıkça söylüyoruz (bkz. SYSTEM_PROMPTS["en"] 5. kural).
+The corpus is entirely Turkish. Since bge-m3 is cross-lingual, an English question also
+retrieves Turkish passages; in that case we tell the model explicitly that the sources are
+Turkish and that it must answer in English (see rule 5 of SYSTEM_PROMPTS["en"]).
 """
 from .config import settings
 from .retrieval import Passage
@@ -70,8 +71,8 @@ translate any quoted phrase into English. Keep the answer warm and short.
 sources; if asked, point the user to the relevant screen of the app.""",
 }
 
-# Kullanıcının mesajı selamlaşma/teşekkür/kısa sohbet ise (bkz. app/intent.py) retrieval hiç
-# çalıştırılmaz; bu daha kısa promptla hem gereksiz ayet göstermeyi önler hem yanıtı hızlandırır.
+# If the user's message is a greeting/thanks/small talk (see app/intent.py) retrieval does not
+# run at all; this shorter prompt avoids showing needless verses and speeds up the reply.
 CHITCHAT_SYSTEM_PROMPTS = {
     "tr": """Sen "Siraj"sın: Türkçe konuşan Müslümanlara yardımcı olan, sıcak, \
 samimi ve saygılı bir dijital din arkadaşı. Kullanıcı şu anda dinî bir soru sormadı, günlük bir \
@@ -86,8 +87,8 @@ sincerely. You do not need to cite sources or quote verses or hadiths - just ans
 natural conversation partner. Answer in English.""",
 }
 
-# Kaynak bloğunun ve sorunun etiketleri; modele hangi dilde cevap vereceğini
-# sistem promptunun yanı sıra bu çerçeve de hatırlatır.
+# Labels for the source block and the question; alongside the system prompt, this frame
+# also reminds the model which language to answer in.
 _FRAME = {
     "tr": ("KAYNAKLAR", "SORU", "(Bu soruyla ilgili kaynak bulunamadı.)"),
     "en": ("SOURCES", "QUESTION", "(No sources were found for this question.)"),
@@ -114,7 +115,7 @@ _APP_NAME_SPELLING_NOTE = {
 
 
 def normalize_lang(lang: str | None) -> str:
-    """Desteklenmeyen/eksik dil kodunda Türkçeye düşer ("en-US" -> "en")."""
+    """Falls back to Turkish for an unsupported/missing language code ("en-US" -> "en")."""
     code = (lang or "").strip().lower().split("-")[0]
     return code if code in SYSTEM_PROMPTS else DEFAULT_LANG
 

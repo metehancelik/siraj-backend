@@ -3,5 +3,5 @@
 __pycache__/
 *.pyc
 tei-data/
-# Veri imaja gömülmez ve repoya girmez; ingest sırasında mount edilir.
+# Data is neither baked into the image nor committed; it is mounted during ingest.
 data/

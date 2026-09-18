@@ -1,19 +1,19 @@
-"""Elle seçilmiş günleri `daily_schedule`'a yazar.
+"""Write hand-picked days into `daily_schedule`.
 
-Kullanım:
+Usage:
     python -m ingest.seed_schedule --file curation/schedule.json
     python -m ingest.seed_schedule --file curation/schedule.json --dry-run
 
-Dosya `curation/` altında, `data/` altında değil: `data/` crawler'ın döküm dizini ve
-gitignore'da: küratörlük tam tersine depoda durmalı.
+The file lives under `curation/`, not `data/`: `data/` is the crawler's dump directory and
+is gitignored, whereas curation must live in the repository.
 
-Küratörlük neden bir dosyada: `daily_schedule` satırları üretim verisidir, kodda görünmez.
-Doğrudan INSERT yazmak yerine depoya işlenmiş bir dosyadan uygulamak, seçimin aylar sonra
-diff'te okunabilmesini ve veritabanı yeniden kurulduğunda tek komutla geri gelmesini
-sağlıyor. Alanı boş bırakılan tür (hadis, dua) o gün rotasyonda kalır - bu dosya yalnızca
-müdahaleyi taşır, günün tamamını değil.
+Why curation lives in a file: `daily_schedule` rows are production data, invisible in the
+code. Applying them from a committed file instead of writing INSERTs by hand keeps the
+choices readable in a diff months later and brings them back with one command when the
+database is rebuilt. A type left empty (hadis, dua) stays on rotation that day - this file
+carries only the overrides, not the whole day.
 
-Ingest gibi, YEREL makineden SSH tüneli üzerinden çalıştırılır (bkz. CLAUDE.md).
+Like ingest, this runs from the LOCAL machine over an SSH tunnel (see CLAUDE.md).
 """
 import argparse
 import asyncio
@@ -32,35 +32,35 @@ FIELDS = ("ayah_global", "hadith_id", "dua_id")
 
 def load(path: Path) -> list[dict]:
     if not path.exists():
-        raise SystemExit(f"Bulunamadı: {path}")
+        raise SystemExit(f"Not found: {path}")
     payload = json.loads(path.read_text(encoding="utf-8"))
     rows = payload.get("rows") if isinstance(payload, dict) else payload
     if not rows:
-        raise SystemExit(f"Boş: {path}")
+        raise SystemExit(f"Empty: {path}")
 
     seen: set[str] = set()
     for row in rows:
         try:
             dt.date.fromisoformat(row["date"])
         except (KeyError, ValueError):
-            raise SystemExit(f"Geçersiz tarih: {row!r}")
+            raise SystemExit(f"Invalid date: {row!r}")
         if row["date"] in seen:
-            raise SystemExit(f"Aynı gün iki kez: {row['date']}")
+            raise SystemExit(f"Same day twice: {row['date']}")
         seen.add(row["date"])
         if not any(row.get(f) for f in FIELDS):
-            raise SystemExit(f"{row['date']}: hiçbir alan seçilmemiş, satırın anlamı yok")
+            raise SystemExit(f"{row['date']}: no field set, the row is meaningless")
     return rows
 
 
 async def seed(path: Path, dry_run: bool) -> None:
     rows = load(path)
-    print(f"{len(rows)} gün, {rows[0]['date']} - {rows[-1]['date']}")
+    print(f"{len(rows)} days, {rows[0]['date']} - {rows[-1]['date']}")
     for row in rows[:3]:
         print(f"  {row['date']}: {row.get('note', '')}")
     if len(rows) > 3:
-        print(f"  … ve {len(rows) - 3} gün daha")
+        print(f"  … and {len(rows) - 3} more days")
     if dry_run:
-        print("\n--dry-run: veritabanına yazılmadı.")
+        print("\n--dry-run: nothing written to the database.")
         return
 
     pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=2)
@@ -68,8 +68,8 @@ async def seed(path: Path, dry_run: bool) -> None:
         schema = Path(__file__).resolve().parents[1] / "schema.sql"
         async with pool.acquire() as conn:
             await conn.execute(schema.read_text(encoding="utf-8"))
-            # Upsert: dosya kaynak, veritabanı kopya. Dosyadan çıkarılan bir gün burada
-            # kalmasın diye dosyadaki aralık önce temizlenir.
+            # Upsert: the file is the source, the database a copy. The file's date range
+            # is cleared first so a day removed from the file does not linger here.
             async with conn.transaction():
                 await conn.execute(
                     "DELETE FROM daily_schedule WHERE date BETWEEN $1 AND $2",
@@ -84,7 +84,7 @@ async def seed(path: Path, dry_run: bool) -> None:
                      for r in rows],
                 )
             total = await conn.fetchval("SELECT count(*) FROM daily_schedule")
-            print(f"daily_schedule: {total} satır.")
+            print(f"daily_schedule: {total} rows.")
     finally:
         await pool.close()
 

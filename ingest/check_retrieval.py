@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Getirim (retrieval) kalite kontrolü - LLM'e geçmeden önce çalıştırın.
+"""Retrieval quality check - run it before involving the LLM.
 
-Uygulamanın örnek sorularını hibrit aramadan geçirir ve dönen ilk pasajları gösterir.
-Sonuçlar konuyla ilgiliyse chat'e geçin; alakasız/çöp geliyorsa bölümleme veya Türkçe
-FTS ayarını burada düzeltmek, 1-2 dakikalık LLM turuyla hata ayıklamaktan çok ucuzdur.
+Runs the app's sample questions through hybrid search and shows the top passages returned.
+If the results are on topic, move on to chat; if they are irrelevant or junk, fixing the
+chunking or the Turkish FTS setup here is far cheaper than debugging through 1-2 minute
+LLM round trips.
 
     python -m ingest.check_retrieval
-    python -m ingest.check_retrieval "kendi sorunuz"
-    python -m ingest.check_retrieval --lang en          # İngilizce yol (sorgu çevirisi)
+    python -m ingest.check_retrieval "your own question"
+    python -m ingest.check_retrieval --lang en          # English path (query translation)
 """
 import asyncio
 import sys
@@ -21,7 +22,7 @@ DEFAULT_QUESTIONS_EN = [
     "What invalidates the fast?",
     "Who is required to pay zakat?",
     "How does Bediuzzaman prove the resurrection?",
-    "How do I fix a Python import error?",  # alakasız - boş kalması beklenir
+    "How do I fix a Python import error?",  # off topic - expected to come back empty
 ]
 
 DEFAULT_QUESTIONS = [
@@ -30,8 +31,8 @@ DEFAULT_QUESTIONS = [
     "Orucu bozan şeyler nelerdir?",
     "Zekat kimlere farzdır?",
     "Abdest nasıl alınır?",
-    "Bediüzzaman haşri nasıl ispat ediyor?",  # risale (Onuncu Söz) beklenir
-    "Bugünün duası nedir?",  # uygulama durumu - alakasız gelmesi/boş kalması beklenir
+    "Bediüzzaman haşri nasıl ispat ediyor?",  # expects risale (Onuncu Söz)
+    "Bugünün duası nedir?",  # app state - expected to be irrelevant or empty
 ]
 
 
@@ -44,10 +45,10 @@ async def main() -> None:
         del args[i:i + 2]
     questions = args or (DEFAULT_QUESTIONS_EN if lang == "en" else DEFAULT_QUESTIONS)
     for q in questions:
-        print(f"\n{'='*70}\nSORU [{lang}]: {q}\n{'='*70}")
+        print(f"\n{'='*70}\nQUESTION [{lang}]: {q}\n{'='*70}")
         passages = await retrieve(q, lang)
         if not passages:
-            print("  (sonuç yok)")
+            print("  (no results)")
             continue
         for i, p in enumerate(passages, start=1):
             snippet = " ".join(p.content.split())[:130]

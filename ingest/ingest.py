@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""JSONL kaynaklarını bölümle, embed et, Postgres'e (pgvector) yükle.
+"""Chunk the JSONL sources, embed them and load them into Postgres (pgvector).
 
-Kullanım:
-    python -m ingest.ingest --data-dir ../data                # tüm kaynaklar
-    python -m ingest.ingest --data-dir ../data --source fetva # tek kaynak
-    python -m ingest.ingest --data-dir ../data --limit 100    # deneme
+Usage:
+    python -m ingest.ingest --data-dir ../data                # all sources
+    python -m ingest.ingest --data-dir ../data --source fetva # a single source
+    python -m ingest.ingest --data-dir ../data --limit 100    # trial run
 
-Yeniden çalıştırılabilir: (source, ref_id, chunk_index) benzersiz; ON CONFLICT ile güncellenir.
-Embedding servisi (TEI) ve Postgres çalışıyor olmalı.
+Safe to rerun: (source, ref_id, chunk_index) is unique and updated via ON CONFLICT.
+The embedding service (TEI) and Postgres must be running.
 """
 import argparse
 import asyncio
@@ -27,10 +27,10 @@ from app.embeddings import embed  # noqa: E402
 from ingest.chunkers import Chunk, chunk_record, merged_title  # noqa: E402
 
 SOURCES = ["meal", "tefsir", "hadis", "fetva", "dua", "ilmihal", "risale", "sorular", "dia"]
-# TEI istek başına en fazla 32 metin kabul eder (max_client_batch_size); 32'yi aşınca 413.
-# CPU'da büyük chunk'larda (tefsir/dia) yanıt yavaş, o yüzden varsayılan küçük tutulur.
+# TEI accepts at most 32 texts per request (max_client_batch_size); above 32 it returns 413.
+# On CPU, responses for large chunks (tefsir/dia) are slow, so the default is kept small.
 EMBED_BATCH = int(os.environ.get("EMBED_BATCH", "16"))
-# Bir embed isteği için timeout (sn) ve geçici hatada tekrar deneme sayısı.
+# Timeout (seconds) for one embed request and the number of retries on transient errors.
 EMBED_TIMEOUT = float(os.environ.get("EMBED_TIMEOUT", "300"))
 EMBED_RETRIES = int(os.environ.get("EMBED_RETRIES", "5"))
 UPSERT_BATCH = 500
@@ -51,7 +51,7 @@ def _vec_literal(vec: list[float]) -> str:
 def iter_chunks(data_dir: Path, source: str, limit: int) -> list[tuple[str, Chunk]]:
     path = data_dir / f"{source}.jsonl"
     if not path.exists():
-        print(f"  ! {path} yok, atlanıyor")
+        print(f"  ! {path} not found, skipping")
         return []
     out = []
     for n, line in enumerate(path.open(encoding="utf-8")):
@@ -93,7 +93,7 @@ def _deduplicate(source: str, chunks: list[tuple[str, Chunk]]) -> list[tuple[str
 
 
 async def _embed_with_retry(texts: list[str], client: httpx.AsyncClient) -> list[list[float]]:
-    """Geçici TEI hatalarında (timeout, bağlantı, 5xx) tekrar dener; kalıcı hatada (4xx) hemen fırlatır."""
+    """Retry on transient TEI errors (timeout, connection, 5xx); raise at once on permanent ones (4xx)."""
     for attempt in range(1, EMBED_RETRIES + 1):
         try:
             return await embed(texts, kind="passage", client=client)
@@ -106,7 +106,7 @@ async def _embed_with_retry(texts: list[str], client: httpx.AsyncClient) -> list
                 raise
             reason = type(exc).__name__
         wait = min(30, 3 * attempt)
-        print(f"  embed hatası ({attempt}/{EMBED_RETRIES}): {reason}; {wait}s sonra tekrar",
+        print(f"  embed error ({attempt}/{EMBED_RETRIES}): {reason}; retrying in {wait}s",
               flush=True)
         await asyncio.sleep(wait)
     raise RuntimeError("unreachable")
@@ -126,7 +126,7 @@ async def _embed_and_upsert(pool: asyncpg.Pool, client: httpx.AsyncClient,
 
 async def run(data_dir: Path, sources: list[str], limit: int) -> None:
     pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=4)
-    # Şemayı garantile (backend'den önce ingest çalıştırılırsa tablo yoksa oluşsun).
+    # Ensure the schema exists (if ingest runs before the backend, create the table).
     schema_path = Path(__file__).resolve().parents[1] / "schema.sql"
     if schema_path.exists():
         async with pool.acquire() as conn:
@@ -134,10 +134,10 @@ async def run(data_dir: Path, sources: list[str], limit: int) -> None:
     total = 0
     async with httpx.AsyncClient(timeout=EMBED_TIMEOUT, trust_env=False) as client:
         for source in sources:
-            print(f"[{source}] bölümleniyor...")
+            print(f"[{source}] chunking...")
             chunks = iter_chunks(data_dir, source, limit)
-            # Devam edebilirlik: zaten yüklü chunk'ları atla → yeniden çalıştırma ucuz,
-            # her deploy'da güvenle koşabilir (dolu DB'de saniyeler sürer).
+            # Resumability: skip chunks already loaded -> reruns are cheap and safe on
+            # every deploy (seconds against a populated DB).
             async with pool.acquire() as conn:
                 rows = await conn.fetch(
                     "SELECT ref_id, chunk_index FROM chunks WHERE source=$1", source)
@@ -146,8 +146,8 @@ async def run(data_dir: Path, sources: list[str], limit: int) -> None:
                 before = len(chunks)
                 chunks = [(s, c) for (s, c) in chunks
                           if (c.ref_id, c.chunk_index) not in existing]
-                print(f"[{source}] {len(existing)} zaten yüklü, {before - len(chunks)} atlandı")
-            print(f"[{source}] {len(chunks)} yeni chunk, embed + yükleme başlıyor")
+                print(f"[{source}] {len(existing)} already loaded, {before - len(chunks)} skipped")
+            print(f"[{source}] {len(chunks)} new chunks, starting embed + load")
             done = 0
             pending: list[tuple[str, Chunk]] = []
             for item in chunks:
@@ -163,16 +163,16 @@ async def run(data_dir: Path, sources: list[str], limit: int) -> None:
                 await _embed_and_upsert(pool, client, pending)
                 done += len(pending)
                 total += len(pending)
-            print(f"[{source}] bitti: {done} chunk")
+            print(f"[{source}] done: {done} chunks")
     await pool.close()
-    print(f"TOPLAM {total} chunk yüklendi.")
+    print(f"TOTAL {total} chunks loaded.")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", default="../data")
-    ap.add_argument("--source", choices=SOURCES, help="tek kaynak (varsayılan: hepsi)")
-    ap.add_argument("--limit", type=int, default=0, help="kaynak başına kayıt sınırı (deneme)")
+    ap.add_argument("--source", choices=SOURCES, help="a single source (default: all)")
+    ap.add_argument("--limit", type=int, default=0, help="record limit per source (trial run)")
     args = ap.parse_args()
     sources = [args.source] if args.source else SOURCES
     asyncio.run(run(Path(args.data_dir), sources, args.limit))

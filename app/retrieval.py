@@ -1,11 +1,12 @@
-"""Hibrit getirim: pgvector kosinüs + Türkçe tam-metin, RRF ile birleştirme.
+"""Hybrid retrieval: pgvector cosine + Turkish full-text, merged with RRF.
 
-Dini metinlerde Türkçe morfoloji (ekler) ve Arapça kökenli terimler için tek başına
-vektör araması yetmez; tam-metin araması tam terim eşleşmelerini yakalar. İkisinin
-sırası Reciprocal Rank Fusion ile harmanlanır.
+For religious texts, given Turkish morphology (suffixes) and terms of Arabic origin,
+vector search alone is not enough; full-text search catches exact term matches. The two
+rankings are blended with Reciprocal Rank Fusion.
 
-Korpüs tamamen Türkçe olduğu için arama da Türkçe yapılır: Türkçe olmayan sorular
-önce Türkçeye çevrilir (bkz. _translate_to_turkish ve config.translate_queries).
+Since the corpus is entirely Turkish, the search is done in Turkish too: non-Turkish
+questions are first translated into Turkish (see _translate_to_turkish and
+config.translate_queries).
 """
 import logging
 import re
@@ -21,7 +22,7 @@ from .llm import complete
 
 log = logging.getLogger("siraj")
 
-RRF_K = 60  # RRF sabiti; büyük değer sıralama farklarını yumuşatır
+RRF_K = 60  # RRF constant; a larger value softens rank differences
 
 
 @dataclass
@@ -39,13 +40,13 @@ def _vector_literal(vec: list[float]) -> str:
     return "[" + ",".join(f"{x:.7f}" for x in vec) + "]"
 
 
-# Türkçe FTS sorgusu. websearch_to_tsquery kelimeleri AND'ler (hepsi eşleşmeli).
-# Eskiden '&' -> '|' ile OR'a çevriliyordu ("recall için AND çok katı" gerekçesiyle);
-# ölçüldüğünde (2026-07-31) bunun korpüsü zehirlediği görüldü: 'bir' lexeme'i
-# chunk'ların %76'sında geçtiği için OR sorgusu 200 binden fazla belge eşleştiriyor,
-# ts_rank_cd de uzun belgeleri ödüllendirdiğinden aynı birkaç dev fetva neredeyse HER
-# soruda ilk 3'e giriyordu. AND isabetli; hiç eşleşmezse FTS ayağı boş kalır ve
-# sıralamayı yalnızca vektör belirler - bu, gürültüden iyidir.
+# Turkish FTS query. websearch_to_tsquery ANDs the words (all must match).
+# It used to be turned into an OR via '&' -> '|' (on the grounds that "AND is too strict
+# for recall"); measured (2026-07-31), this poisoned the corpus: the 'bir' lexeme appears
+# in 76% of chunks, so the OR query matched more than 200 thousand documents, and since
+# ts_rank_cd rewards long documents, the same few huge fatwas made the top 3 on almost
+# EVERY question. AND is precise; if nothing matches, the FTS leg stays empty and the
+# vector alone decides the ranking - which beats noise.
 _SQL = """
 WITH q AS (
     SELECT $1::vector AS emb,
@@ -94,12 +95,12 @@ SELECT
 """
 
 
-# Kullanıcı ne tür bir kaynak istediğini söylediğinde aramayı oraya daraltırız.
-# Gerekçe (ölçüm, 2026-07-31): "Sabır hakkında bir ayet" sorusunda en yakın 6 komşunun
-# hepsi DİA maddesiydi; en iyi ayet 0.3055 ile top_k'ya hiç giremiyordu. Bu bir sıralama
-# hatası değil - bir kavramı anlatan ansiklopedi maddesi, o kavramdan bahseden TEK bir
-# ayetten kosinüs olarak gerçekten daha yakın (chunk'tan şablon öneki çıkarmak durumu
-# kötüleştiriyor: 0.3743 -> 0.4407). Kullanıcı "ayet" dediyse niyeti açıktır, kullanırız.
+# When the user says what kind of source they want, we narrow the search to it.
+# Reason (measured, 2026-07-31): for "Sabır hakkında bir ayet" all 6 nearest neighbours
+# were DİA entries; the best verse, at 0.3055, never made top_k. This is not a ranking
+# bug - an encyclopaedia entry explaining a concept really is closer in cosine than a
+# SINGLE verse mentioning it (stripping the template prefix from the chunk makes it worse:
+# 0.3743 -> 0.4407). If the user said "ayet" the intent is clear, so we use it.
 _SOURCE_INTENT: list[tuple[re.Pattern, tuple[str, ...]]] = [
     (re.compile(r"\b(ayet|ayeti|ayette|ayetler|sure|suresi|verse|verses)\b"), ("meal", "tefsir")),
     (re.compile(r"\b(hadis|hadisi|hadiste|hadisler|hadith|hadiths|sunnet)\b"), ("hadis",)),
@@ -157,7 +158,7 @@ def _fts_text(question: str) -> str:
 
 
 def _detect_sources(question: str) -> list[str] | None:
-    """Soru açıkça bir kaynak türü istiyorsa o kaynakları döner, aksi halde None."""
+    """Returns the sources if the question explicitly asks for a source type, else None."""
     folded = question.lower().replace("ı", "i").replace("â", "a").replace("î", "i")
     folded = unicodedata.normalize("NFD", folded)
     folded = "".join(c for c in folded if unicodedata.category(c) != "Mn")
@@ -167,13 +168,13 @@ def _detect_sources(question: str) -> list[str] | None:
     return None
 
 
-# Korpüsün fetva/soru-cevap parçaları "Soru: <başlık> Cevap: ..." biçiminde saklandığı
-# için her parçanın vektörüne bir soru cümlesi hâkim; arama, korpüstekine benzer kurulmuş
-# sorulara belirgin biçimde yakın çıkıyor. Ölçüldüğünde (2026-08-03) "Kurban hakkında
-# hüküm nedir?" en yakın komşuya 0.7203 uzaklıktaydı ve kapıdan dönüyordu; aynı şeyi
-# soran "Kurban kesmenin hükmü nedir?" ise 0.2935 ile doğru fetvaları getiriyordu. Bu
-# yüzden çevirmenden düz bir çeviri değil, Türkçe bir soru-cevap sitesinde sorulacak
-# biçimde tam bir soru cümlesi isteniyor.
+# The corpus's fatwa/Q&A chunks are stored as "Soru: <title> Cevap: ...", so a question
+# sentence dominates each chunk's vector; the search comes out markedly closer for
+# questions phrased like the ones in the corpus. Measured (2026-08-03), "Kurban hakkında
+# hüküm nedir?" was 0.7203 from its nearest neighbour and was turned away at the gate,
+# while "Kurban kesmenin hükmü nedir?", asking the same thing, brought the right fatwas at
+# 0.2935. So the translator is asked not for a literal translation but for a full question
+# sentence, phrased as it would be asked on a Turkish Q&A site.
 _TRANSLATE_SYSTEM = (
     "You translate a user's question into Turkish so it can be used as a search query "
     "over a Turkish corpus of Islamic sources. Output ONLY the Turkish translation, "
@@ -187,14 +188,14 @@ _TRANSLATE_SYSTEM = (
     "abdest, ritual bath -> gusül, fasting -> oruç, alms -> zekât, resurrection -> haşir, "
     "prayer -> namaz, pilgrimage -> hac, the hereafter -> ahiret."
 )
-# Uygulamanın hazır örnek soruları her açılışta aynı; küçük bir önbellek çeviri
-# çağrısının çoğunu tamamen atlatır.
+# The app's built-in sample questions are the same on every launch; a small cache skips
+# most translation calls entirely.
 _TRANSLATION_CACHE: OrderedDict[str, str] = OrderedDict()
 _CACHE_MAX = 256
 
 
 async def _translate_to_turkish(question: str) -> str | None:
-    """Soruyu arama için Türkçeye çevirir; çeviri yapılamazsa None döner."""
+    """Translates the question into Turkish for search; returns None if it cannot."""
     key = question.strip()
     cached = _TRANSLATION_CACHE.get(key)
     if cached is not None:
@@ -207,7 +208,7 @@ async def _translate_to_turkish(question: str) -> str | None:
             max_tokens=settings.translate_max_tokens,
         )
     except Exception as exc:
-        log.warning("sorgu çevirisi başarısız (%s), özgün soruyla aranıyor", exc)
+        log.warning("query translation failed (%s), searching with the original question", exc)
         return None
     turkish = turkish.strip().strip('"').strip()
     if not turkish:
@@ -221,7 +222,7 @@ async def _translate_to_turkish(question: str) -> str | None:
 async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
     import json
 
-    # Arama daima Türkçe yapılır (korpüsün dili); soru başka dildeyse önce çevrilir.
+    # Search is always in Turkish (the corpus language); other languages are translated first.
     turkish_query = lang == "tr"
 
     # When the meaning of the app's name is asked, the search runs with the query that is
@@ -245,26 +246,29 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
     async with pool.acquire() as conn:
         relevance = await conn.fetchrow(_RELEVANCE_SQL, _vector_literal(qvec), fts_question)
 
-    # Vektör araması "en yakın komşu" mantığıyla çalıştığı için külliyatla hiç ilgisi
-    # olmayan bir soruda bile bir şeyler döner. Ne semantik olarak yakın (mesafe eşiğin
-    # altında) ne de tam-metin eşleşmesi varsa, bu soru bu külliyatla alakasızdır ->
-    # boş dön (sahte/alakasız kaynak göstermemek için; bkz. app/prompt.py boş-passages yolu).
-    # Eşik ve FTS Türkçe sorgularla ölçülüp ayarlandı. Sorgu Türkçeye çevrilemediyse
-    # (çeviri kapalı veya hata verdi) bu kapı geçerli değil: ölçüldüğünde (2026-07-31)
-    # İngilizce sorularda alakalı ile alakasız ayrışmıyordu ve FTS hiç eşleşmiyordu.
-    # Bozuk bir kapıyla herkesi geri çevirmektense kapıyı atlayıp pasajları veriyoruz;
-    # alakasızsa modelin "kaynaklarda bulamadım" kuralı devreye girer.
+    # Vector search works by nearest neighbour, so it returns something even for a
+    # question that has nothing to do with the corpus. If there is neither semantic
+    # closeness (distance under the threshold) nor a full-text match, the question is
+    # unrelated to this corpus -> return nothing (so as not to show fake/unrelated sources;
+    # see the empty-passages path in app/prompt.py).
+    # The threshold and FTS were measured and tuned with Turkish queries. If the query
+    # could not be translated into Turkish (translation off or failed) this gate does not
+    # apply: measured (2026-07-31), relevant and unrelated did not separate for English
+    # questions and FTS never matched. Rather than turn everyone away with a broken gate,
+    # we skip it and pass the passages on; if they are unrelated, the model's "not in my
+    # sources" rule takes over.
     best_dist = relevance["best_dist"]
     if turkish_query and (best_dist is None
                           or best_dist > settings.retrieval_max_distance) \
             and not relevance["fts_hit"]:
         return []
 
-    # Vektör ayağı bu soruda işe yaramıyorsa (en yakın komşu eşiğin ötesinde) tam-metin
-    # ayağına ağırlık ver; aksi halde ölçülmüş 0.5'te kal. Bkz. config.fts_weight_weak_vector.
-    vektor_zayif = best_dist is None or best_dist > settings.retrieval_max_distance
-    fts_agirlik = (settings.fts_weight_weak_vector if vektor_zayif
-                   else settings.fts_weight)
+    # If the vector leg is of no use for this question (nearest neighbour beyond the
+    # threshold), weight the full-text leg; otherwise stay at the measured 0.5.
+    # See config.fts_weight_weak_vector.
+    weak_vector = best_dist is None or best_dist > settings.retrieval_max_distance
+    fts_weight = (settings.fts_weight_weak_vector if weak_vector
+                  else settings.fts_weight)
 
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -275,7 +279,7 @@ async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
             RRF_K,
             settings.top_k,
             _detect_sources(question),
-            fts_agirlik,
+            fts_weight,
         )
 
     out: list[Passage] = []

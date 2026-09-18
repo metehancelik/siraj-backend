@@ -1,21 +1,21 @@
-# Siraj RAG - Coolify / docker compose kurulumu.
-# Coolify'da: yeni kaynak > Docker Compose > bu dosyayı yapıştırın, ortam değişkenlerini girin.
-# Gizli değerler Coolify ortam sekmesinden (veya yanındaki .env'den) gelir:
+# Siraj RAG - Coolify / docker compose setup.
+# In Coolify: new resource > Docker Compose > paste this file, fill in the env variables.
+# Secrets come from the Coolify environment tab (or the .env next to this file):
 #   SIRAJ_IMAGE, POSTGRES_PASSWORD, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, API_TOKEN
 
 services:
   backend:
     image: ${SIRAJ_IMAGE:-metehancelik/siraj-backend:latest}
     restart: unless-stopped
-    # LiteLLM aynı sunucuda; backend'in host'un yayınlanan portuna (LiteLLM) ulaşması için.
-    # Böylece LLM_BASE_URL=http://host.docker.internal:<litellm-host-portu>/v1 ile
-    # public URL'i (Cloudflare) atlar → sunucu IP'sinin engellenmesi sorunu ortadan kalkar.
+    # LiteLLM runs on the same server; this lets the backend reach the host's published
+    # port (LiteLLM). With LLM_BASE_URL=http://host.docker.internal:<litellm-host-port>/v1 it
+    # skips the public URL (Cloudflare) → no more server IP getting blocked.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: postgresql://siraj:${POSTGRES_PASSWORD}@db:5432/siraj
-      # Embedding: varsayılan olarak gömülü TEI'ye doğrudan (kutudan çıktığı gibi çalışır).
-      # LiteLLM üzerinden erişmek isterseniz: EMBEDDING_MODE=openai + EMBEDDING_BASE_URL/API_KEY.
+      # Embedding: by default straight to the bundled TEI (works out of the box).
+      # To go through LiteLLM instead: EMBEDDING_MODE=openai + EMBEDDING_BASE_URL/API_KEY.
       EMBEDDING_MODE: ${EMBEDDING_MODE:-tei}
       EMBEDDING_URL: http://embeddings:80
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
@@ -25,27 +25,27 @@ services:
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL: ${LLM_MODEL:-gemma-4-12b}
       API_TOKEN: ${API_TOKEN}
-      # Türkçe olmayan sorular aramadan önce Türkçeye çevrilir (bkz. README > İngilizce).
+      # Non-Turkish questions are translated into Turkish before search (see README > API).
       TRANSLATE_QUERIES: ${TRANSLATE_QUERIES:-true}
       TOP_K: "3"
       MAX_CHUNK_CHARS: "550"
       LLM_MAX_TOKENS: "320"
     ports:
-      - "8000:8000"   # Coolify'da bunun yerine domain + reverse proxy kullanın
+      - "8000:8000"   # in Coolify use a domain + reverse proxy instead
     depends_on:
       db:
         condition: service_healthy
       embeddings:
         condition: service_started
 
-  # bge-m3 embedding servisi. Model imaja GÖMÜLÜ (Dockerfile.embeddings) → çalışma anında
-  # HF indirmesi YOK, dolayısıyla sunucudaki bozuk proxy env'i sorun çıkarmaz.
+  # bge-m3 embedding service. The model is BAKED INTO the image (Dockerfile.embeddings) →
+  # NO HF download at runtime, so the broken proxy env on the server causes no trouble.
   embeddings:
     image: ${SIRAJ_EMBEDDINGS_IMAGE:-metehancelik/siraj-embeddings:latest}
     restart: unless-stopped
 
-  # pgvector'lü Postgres. Kendi Postgres'inizi kullanacaksanız bu servisi silip
-  # backend'in DATABASE_URL'ini kendi sunucunuza yöneltin ve schema.sql'i elle uygulayın.
+  # Postgres with pgvector. To use your own Postgres, delete this service, point the
+  # backend's DATABASE_URL at your server and apply schema.sql by hand.
   db:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
@@ -61,16 +61,16 @@ services:
       timeout: 5s
       retries: 10
 
-  # --- İsteğe bağlı: ingest'i tek seferlik iş olarak çalıştırmak için ---
-  # Varsayılan deploy'da başlamaz (profile). Elle tetiklenir:
+  # --- Optional: run ingest as a one-off job ---
+  # Does not start in the default deploy (profile). Triggered by hand:
   #   docker compose --profile ingest run --rm ingest
   ingest:
     image: ${SIRAJ_IMAGE:-metehancelik/siraj-backend:latest}
     profiles: ["ingest"]
     restart: "no"
     command: python -m ingest.ingest --data-dir /app/data
-    # Veri imajda gömülü DEĞİL: JSONL'i sunucuya kopyalayıp (scp) DATA_DIR'e koyun,
-    # o dizin ingest'e /app/data olarak bağlanır. Örn: DATA_DIR=/opt/siraj/data
+    # Data is NOT baked into the image: copy the JSONL to the server (scp) into DATA_DIR,
+    # which is mounted into ingest as /app/data. E.g. DATA_DIR=/opt/siraj/data
     volumes:
       - ${DATA_DIR:-./data}:/app/data:ro
     environment:

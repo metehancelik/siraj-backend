@@ -1,19 +1,20 @@
-# bge-m3 modeli imaja GÖMÜLÜ TEI imajı.
-# Neden: sunucudaki bozuk proxy env'i, TEI'nin çalışma anında HuggingFace'ten model
-# indirmesini engelliyor. Modeli derleme anında (iyi internetli makinenizde) indirip
-# gömeriz; sunucuda TEI /model'den yükler, HF'e hiç bağlanmaz → proxy sorunu tamamen biter.
+# TEI image with the bge-m3 model BAKED IN.
+# Why: the broken proxy env on the server stops TEI from downloading the model from
+# HuggingFace at runtime. We download and bake the model in at build time (on your machine
+# with good internet); on the server TEI loads from /model and never contacts HF → the
+# proxy problem goes away entirely.
 #
-# ÖNEMLİ: TEI'nin CPU imajı ONNX backend kullanır (safetensors değil), bu yüzden bge-m3'ün
-# onnx/ ağırlıkları gömülür (model.onnx + harici veri dosyaları).
+# IMPORTANT: TEI's CPU image uses the ONNX backend (not safetensors), so bge-m3's onnx/
+# weights are baked in (model.onnx + external data files).
 #
-# Derleme (kendi makinenizde):
+# Build (on your own machine):
 #   cd siraj-backend
 #   docker buildx build --platform linux/amd64 -f Dockerfile.embeddings \
 #     -t metehancelik/siraj-embeddings:latest --push .
 
 FROM python:3.12-slim AS downloader
 RUN pip install --no-cache-dir "huggingface_hub[cli]"
-# Root config/tokenizer/pooling + onnx ağırlıkları (model.onnx dış veri dosyalarına muhtaç)
+# Root config/tokenizer/pooling + onnx weights (model.onnx needs its external data files)
 RUN hf download BAAI/bge-m3 --local-dir /model \
       config.json \
       tokenizer.json \
@@ -27,7 +28,7 @@ RUN hf download BAAI/bge-m3 --local-dir /model \
       onnx/model.onnx \
       onnx/model.onnx_data \
       onnx/Constant_7_attr__value
-# Doğrulama: kritik dosyalar var mı (yoksa build patlasın)
+# Check: are the critical files present (fail the build if not)
 RUN test -f /model/onnx/model.onnx && test -f /model/onnx/model.onnx_data \
       && test -f /model/1_Pooling/config.json && test -f /model/config.json \
       && test -f /model/tokenizer.json
