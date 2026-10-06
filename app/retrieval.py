@@ -8,6 +8,7 @@ Since the corpus is entirely Turkish, the search is done in Turkish too: non-Tur
 questions are first translated into Turkish (see _translate_to_turkish and
 config.translate_queries).
 """
+import json
 import logging
 import re
 import unicodedata
@@ -220,8 +221,6 @@ async def _translate_to_turkish(question: str) -> str | None:
 
 
 async def retrieve(question: str, lang: str = "tr") -> list[Passage]:
-    import json
-
     # Search is always in Turkish (the corpus language); other languages are translated first.
     turkish_query = lang == "tr"
 

@@ -3,13 +3,14 @@
 Mobile protocol (text/event-stream), each line `data: {json}`:
   {"type":"sources", "sources":[{n,source,label,title,url}]}   (once, before generation)
   {"type":"delta",   "text":"..."}                              (many times)
-  {"type":"done"}
+  {"type":"done",    "cited":[n, ...]}                          (source numbers the answer cites)
   {"type":"error",   "message":"..."}
 """
 import datetime as dt
 import json
 import re
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,7 +25,16 @@ from .llm import stream_completion
 from .prompt import build_user_message, normalize_lang, source_label, system_prompt
 from .retrieval import retrieve
 
-app = FastAPI(title="Siraj RAG")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    await get_pool()
+    await migrate()
+    yield
+    await close_pool()
+
+
+app = FastAPI(title="Siraj RAG", lifespan=_lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,17 +62,6 @@ def _check_auth(authorization: str | None) -> None:
     expected = f"Bearer {settings.api_token}"
     if authorization != expected:
         raise HTTPException(status_code=401, detail="Geçersiz veya eksik yetki anahtarı")
-
-
-@app.on_event("startup")
-async def _startup() -> None:
-    await get_pool()
-    await migrate()
-
-
-@app.on_event("shutdown")
-async def _shutdown() -> None:
-    await close_pool()
 
 
 @app.get("/health")

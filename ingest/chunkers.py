@@ -60,7 +60,6 @@ def _append(chunks: list[str], buf: str, piece: str) -> str:
 
 
 def _split_long(para: str) -> list[str]:
-    import re
     sentences = re.split(r"(?<=[.!?…])\s+", para)
     out, buf = [], ""
     for s in sentences:
